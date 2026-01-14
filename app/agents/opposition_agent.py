@@ -12,14 +12,24 @@ class OppositionAgent(BaseAgent):
         self, factor: Factor, support: SupportArguments
     ) -> OppositionCounterArguments:
         prompt_template = self._read_prompt("opposition_prompt.txt")
-        prompt = prompt_template.format(
-            factor_json=factor.json(),
-            support_json=support.json(),
+
+        prompt = (
+            f"{prompt_template}\n\n"
+            f"Factor:\n{factor.model_dump_json()}\n\n"
+            f"Support Output:\n{support.model_dump_json()}"
         )
 
         content = await self.llm.acompletion(prompt)
+
         try:
             data = self.llm.parse_json(content)
             return OppositionCounterArguments(**data)
         except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Counter-arguments parsing failed: {e}")
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "Counter-arguments parsing failed",
+                    "reason": str(e),
+                    "llm_output": content,
+                },
+            )

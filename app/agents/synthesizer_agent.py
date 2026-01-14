@@ -13,14 +13,26 @@ class SynthesizerAgent(BaseAgent):
         self, context: ReasoningContext, debates: list[DebateTrace]
     ) -> FinalReport:
         prompt_template = self._read_prompt("synthesis_prompt.txt")
-        prompt = prompt_template.format(
-            context_json=context.json(),
-            debate_json="[" + ",".join(d.json() for d in debates) + "]",
+
+        debates_json = "[" + ",".join(d.model_dump_json() for d in debates) + "]"
+
+        prompt = (
+            f"{prompt_template}\n\n"
+            f"Context:\n{context.model_dump_json()}\n\n"
+            f"Debate Traces:\n{debates_json}"
         )
 
         content = await self.llm.acompletion(prompt)
+
         try:
             data = self.llm.parse_json(content)
             return FinalReport(**data)
         except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Final report parsing failed: {e}")
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "Final report parsing failed",
+                    "reason": str(e),
+                    "llm_output": content,
+                },
+            )

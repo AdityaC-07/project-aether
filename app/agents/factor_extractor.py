@@ -17,6 +17,11 @@ class FactorExtractorAgent(BaseAgent):
 
         content = await self.llm.acompletion(prompt)
 
+        print("\n" + "="*60)
+        print("🔍 RAW LLM OUTPUT (FACTOR EXTRACTOR):")
+        print(content)
+        print("="*60 + "\n")
+
         try:
             data = self.llm.parse_json(content)
             raw_factors = data.get("factors", [])

@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.schemas.context import ReasoningContext
@@ -16,7 +19,7 @@ app.add_middleware(
 
 orchestrator = AetherOrchestrator()
 
-
+import traceback
 @app.post("/analyze")
 async def analyze(context: ReasoningContext):
     try:
@@ -25,8 +28,10 @@ async def analyze(context: ReasoningContext):
     except HTTPException:
         raise
     except Exception as e:
+        print("\nEXCEPTION IN /analyze")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 
 @app.get("/")
 async def root():
