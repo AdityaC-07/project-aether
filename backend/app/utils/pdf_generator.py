@@ -25,13 +25,6 @@ class AETHERPDFGenerator:
             'sales': 'Sales',
             'organization': 'Organization',
             'policy': 'Policy',
-            'market': 'Market',
-            'financial': 'Financial',
-            'operational': 'Operational',
-            'strategic': 'Strategic',
-            'technical': 'Technical',
-            'competitive': 'Competitive',
-            'regulatory': 'Regulatory',
             'statistics': 'Statistics',
         }
         return domain_map.get(domain.lower(), domain)
