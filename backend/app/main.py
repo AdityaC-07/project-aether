@@ -9,6 +9,7 @@ from io import BytesIO
 from app.schemas.context import ReasoningContext
 from app.orchestrator import AetherOrchestrator
 from app.utils.pdf_generator import AETHERPDFGenerator
+from app.utils.pdf_parser import extract_metadata_and_text
 
 app = FastAPI(title="Project AETHER", version="1.0.0")
 
@@ -43,18 +44,14 @@ async def analyze_pdf(file: UploadFile = File(...)):
     try:
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
-        with pdfplumber.open(file.file) as pdf:
-            text = ""
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
+        
+        file_bytes = await file.read()
+        pdf_data = extract_metadata_and_text(file_bytes)
+        
         context = ReasoningContext(
-            narrative=text.strip(),
+            narrative=pdf_data["text"],
             extracted_facts=[],
-            metrics=[],
+            metrics=pdf_data.get("metrics", []),
             assumptions=[],
             limitations=[]
         )
@@ -100,25 +97,18 @@ async def analyze_pdf_report(file: UploadFile = File(...)):
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
-        with pdfplumber.open(file.file) as pdf:
-            text = ""
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-        
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
+        file_bytes = await file.read()
+        pdf_data = extract_metadata_and_text(file_bytes)
         
         context = ReasoningContext(
-            narrative=text.strip(),
+            narrative=pdf_data["text"],
             extracted_facts=[],
-            metrics=[],
+            metrics=pdf_data.get("metrics", []),
             assumptions=[],
             limitations=[]
         )
         result = await orchestrator.analyze(context)
-        pdf_bytes = pdf_generator.generate_report(result, text.strip())
+        pdf_bytes = pdf_generator.generate_report(result, pdf_data["text"])
         
         return Response(
             content=pdf_bytes,

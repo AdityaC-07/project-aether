@@ -24,6 +24,8 @@ pypdfium2==5.3.0
 python-dotenv==1.0.1
 python-multipart==0.0.21
 PyYAML==6.0.3
+camelot-py[cv]==0.10.1
+opencv-python==4.11.0.86
 reportlab==4.4.7
 requests==2.32.5
 rsa==4.9.1

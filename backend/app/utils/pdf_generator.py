@@ -18,6 +18,24 @@ class AETHERPDFGenerator:
         self.styles = getSampleStyleSheet()
         self._create_custom_styles()
 
+    @staticmethod
+    def _format_domain_name(domain: str) -> str:
+        """Convert domain enum to readable name."""
+        domain_map = {
+            'sales': 'Sales',
+            'organization': 'Organization',
+            'policy': 'Policy',
+            'market': 'Market',
+            'financial': 'Financial',
+            'operational': 'Operational',
+            'strategic': 'Strategic',
+            'technical': 'Technical',
+            'competitive': 'Competitive',
+            'regulatory': 'Regulatory',
+            'statistics': 'Statistics',
+        }
+        return domain_map.get(domain.lower(), domain)
+
     def _create_custom_styles(self):
         """Create custom paragraph styles."""
         # Only add styles if they don't already exist
@@ -66,8 +84,7 @@ class AETHERPDFGenerator:
         story = []
 
         # Title
-        story.append(Paragraph("🧠 PROJECT AETHER", self.styles['CustomTitle']))
-        story.append(Paragraph("AI-Powered Debate & Synthesis System", self.styles['Heading2']))
+        story.append(Paragraph("AI-Powered Debate & Synthesis Report", self.styles['CustomTitle']))
         story.append(Spacer(1, 0.2*inch))
 
         # Metadata
@@ -142,7 +159,8 @@ class AETHERPDFGenerator:
                 factor_text = f"<b>Factor {idx}:</b> {factor.get('description', 'N/A')}"
                 story.append(Paragraph(factor_text, self.styles['AetherBodyText']))
                 domain = factor.get('domain', 'Unknown')
-                story.append(Paragraph(f"<i>Domain: {domain}</i>", self.styles['Normal']))
+                formatted_domain = self._format_domain_name(domain)
+                story.append(Paragraph(f"<i>Domain: {formatted_domain}</i>", self.styles['Normal']))
                 story.append(Spacer(1, 0.1*inch))
             story.append(Spacer(1, 0.2*inch))
 
