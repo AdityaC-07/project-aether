@@ -6,6 +6,7 @@ from typing import Any
 from app.utils.llm_client import LLMClient
 
 
+
 class BaseAgent:
     def __init__(self, llm: LLMClient) -> None:
         self.llm = llm
