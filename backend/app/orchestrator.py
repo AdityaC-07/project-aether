@@ -29,6 +29,37 @@ class AetherOrchestrator:
         self.log_file = self.logs_dir / "reasoning_logs.json"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
+    def _calculate_confidence(self, debate_logs: List[DebateTrace], final_report: FinalReport) -> float:
+        """Calculate confidence score based on debate analysis quality and balance."""
+        if not debate_logs:
+            return 0.0
+        
+        total_score = 0.0
+        factors_count = len(debate_logs)
+        
+        for debate in debate_logs:
+            support_count = len(debate.support.support_arguments)
+            opposition_count = len(debate.opposition.counter_arguments)
+            
+            # Score based on argument richness (0-50 points)
+            argument_richness = min((support_count + opposition_count) / 6 * 50, 50)
+            
+            # Score based on debate balance (0-30 points)
+            if support_count > 0 and opposition_count > 0:
+                balance_ratio = min(support_count, opposition_count) / max(support_count, opposition_count)
+                balance_score = balance_ratio * 30
+            else:
+                balance_score = 0
+            
+            # Score based on argument depth (0-20 points)
+            depth_score = 20 if support_count > 0 and opposition_count > 0 else 10
+            
+            total_score += argument_richness + balance_score + depth_score
+        
+        # Average and normalize to 0-100
+        avg_score = (total_score / factors_count) if factors_count > 0 else 0
+        return round(min(avg_score, 100), 1)
+
     async def analyze(self, context: ReasoningContext) -> Dict[str, Any]:
         # 1) Factor extraction
         factors: List[Factor] = await self.factor_extractor.extract_factors(context)
@@ -51,6 +82,10 @@ class AetherOrchestrator:
 
         # 3) Synthesis
         final_report: FinalReport = await self.synthesizer_agent.generate_report(context, debate_logs)
+
+        # Calculate confidence score based on debate balance
+        confidence_score = self._calculate_confidence(debate_logs, final_report)
+        final_report.confidence_score = confidence_score
 
         # 4) Persist logs (structured, readable)
         session_log: Dict[str, Any] = {

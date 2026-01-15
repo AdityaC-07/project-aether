@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 import pdfplumber
 from io import BytesIO
 from app.schemas.context import ReasoningContext
@@ -80,10 +80,10 @@ async def analyze_report(context: ReasoningContext):
         result = await orchestrator.analyze(context)
         pdf_bytes = pdf_generator.generate_report(result, context.narrative)
         
-        return FileResponse(
-            BytesIO(pdf_bytes),
+        return Response(
+            content=pdf_bytes,
             media_type="application/pdf",
-            filename="AETHER_Analysis_Report.pdf"
+            headers={"Content-Disposition": "attachment; filename=AETHER_Analysis_Report.pdf"}
         )
     except HTTPException:
         raise
@@ -120,10 +120,10 @@ async def analyze_pdf_report(file: UploadFile = File(...)):
         result = await orchestrator.analyze(context)
         pdf_bytes = pdf_generator.generate_report(result, text.strip())
         
-        return FileResponse(
-            BytesIO(pdf_bytes),
+        return Response(
+            content=pdf_bytes,
             media_type="application/pdf",
-            filename="AETHER_PDF_Analysis_Report.pdf"
+            headers={"Content-Disposition": "attachment; filename=AETHER_PDF_Analysis_Report.pdf"}
         )
     except HTTPException:
         raise
