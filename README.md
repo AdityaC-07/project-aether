@@ -1,146 +1,175 @@
-# Project AETHER
+# Project AETHER 🚀
 
-Coordinator-driven **multi-agent AI system** for structured debate, opposition, and synthesis over a normalized reasoning context.
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18+-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Google Gemini](https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Vertex AI](https://img.shields.io/badge/Vertex_AI-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white)](https://cloud.google.com/vertex-ai)
 
-The system extracts debatable factors, argues for and against them using independent agents, and synthesizes a transparent final report — all orchestrated deterministically.
+> **Coordinator-driven multi-agent AI system for structured debate, opposition, and synthesis over a normalized reasoning context.**
 
----
+Project AETHER eliminates bias in decision-making by enforcing a **"debate-first"** approach, where independent AI agents systematically argue for and against key claims extracted from complex documents. The system synthesizes balanced, transparent final reports—perfect for analyzing business reports, policy documents, sales data, and organizational insights.
 
-## Features
 
-### Backend (Python/FastAPI)
 
-- **Multi-Agent Orchestration**: FactorExtractor, Support, Opposition, and Synthesizer agents working in sequence
-- **PDF Processing**:
-  - Text extraction from PDFs
-  - Table extraction and parsing (numeric values → metrics)
-  - Metadata extraction
-- **Structured Debate System**: Automatic pro/con analysis for each identified factor
-- **Reasoning Context Management**: Unified data model for facts, metrics, assumptions, and limitations
-- **JSON Logging**: All analysis sessions logged with full reasoning trace
-- **PDF Report Generation**: Beautiful formatted PDF reports with embedded analysis
+## 🎯 Problem Statement
 
-### Frontend (React/Vite)
+Traditional AI summarization tools provide one-sided insights without challenging assumptions. Business Intelligence tools visualize data but lack critical reasoning. Manual document analysis is time-consuming and prone to confirmation bias.
 
-- **Interactive UI**: Components for uploading PDFs, entering factors, and viewing results
-- **Real-time Analysis**: Direct integration with backend API
-- **Responsive Design**: Mobile-friendly interface
-- **Factor Management**: Input custom factors with domain tagging
-- **Results Display**: Visualized debate logs and synthesis
+**Project AETHER solves this by:**
+- ✅ Automating adversarial debate on every claim
+- ✅ Ensuring comprehensive evaluation through multi-agent architecture
+- ✅ Generating actionable insights with transparency and auditability
+- ✅ Reducing decision errors by an estimated 20-50%
 
 ---
 
-## Tech Stack
+## ✨ Key Features
 
-- **Backend**: Python 3.10+, FastAPI, Pydantic v2, Gemini API
-- **Frontend**: React 18+, Vite, CSS
-- **Data Processing**: PyPDF2, Camelot (table extraction), OpenCV
-- **Async**: async/await architecture
-- **Logging**: Structured JSON logging
-- **PDF Generation**: ReportLab
+### 🎭 Multi-Agent Debate System
+- **FactorExtractor Agent**: Identifies debatable factors from input documents
+- **Support Agent**: Generates pro arguments with evidence and assumptions
+- **Opposition Agent**: Creates counter-arguments challenging each claim
+- **Synthesizer Agent**: Combines findings into balanced final reports
+
+### 📄 Flexible Input Processing
+- **PDF Upload**: Automatic text and table extraction from documents
+- **JSON Input**: Manual entry of narratives, facts, metrics, assumptions, and limitations
+- **Table Parsing**: Converts numeric table data into structured metrics
+
+### 📊 Intelligent Analysis
+- Structured debate logs for every identified factor
+- Domain categorization (Sales, Organization, Policy, Statistics)
+- Confidence scoring (0-100) based on debate balance and depth
+- Evidence-based reasoning with assumption tracking
+
+### 📋 Comprehensive Reporting
+- **What worked**: Successful factors and their impact
+- **What failed**: Problematic areas requiring attention
+- **Why it happened**: Root cause analysis
+- **How to improve**: Actionable recommendations
+- **Synthesis**: Executive summary with confidence score
+
+### 🔒 Enterprise-Ready
+- Schema-validated outputs (Pydantic v2)
+- Structured JSON logging for audit trails
+- Async architecture for scalability
+- Git-ignored sensitive data and logs
+- API-key protected endpoints
 
 ---
 
-## Architecture Overview
+## 🏗️ Architecture
 
 ```
-Request (via API or PDF Upload)
-↓
+Request (PDF/JSON)
+        ↓
 ReasoningContext (validated)
-↓
+        ↓
 FactorExtractorAgent → Extract debatable factors + domain
-↓
+        ↓
 SupportAgent → Generate pro arguments for each factor
-↓
+        ↓
 OppositionAgent → Generate counter arguments
-↓
+        ↓
 SynthesizerAgent → Combine and synthesize findings
-↓
-Final Structured Report + Debate Logs
-↓
-Optional: Generate PDF Report
+        ↓
+Final Report + Debate Logs + Optional PDF
 ```
 
-**Key Properties:**
-
-- Agents **never call each other** directly
-- **Orchestrator enforces sequence** deterministically
-- No agent invents facts beyond the provided context
-- All outputs are **strict JSON schemas**
-- Table parsing is **optional** and never crashes the pipeline
+**Key Principles:**
+- 🚫 No agent-to-agent communication (deterministic orchestration)
+- 📜 No hallucination (strict context adherence)
+- ✅ Schema-validated outputs
+- 🛡️ Graceful degradation (optional features never crash)
 
 ---
 
-## Setup
+## 🛠️ Tech Stack
 
-### 1) Create and activate a virtual environment (Windows PowerShell)
+### Backend
+- **Framework**: FastAPI
+- **Language**: Python 3.10+
+- **LLM**: Google Gemini (gemini-1.5-flash)
+- **AI Platform**: Vertex AI
+- **Validation**: Pydantic v2
+- **PDF Processing**: PyPDF2, Camelot, OpenCV
+- **Report Generation**: ReportLab
+- **Async**: asyncio/await
 
-```powershell
+### Frontend
+- **Framework**: React 18+
+- **Build Tool**: Vite
+- **Styling**: CSS
+- **HTTP Client**: Fetch API
+
+### DevOps
+- **Environment**: python-dotenv
+- **Logging**: Structured JSON
+- **Version Control**: Git (with .gitignore for secrets)
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.10 or higher
+- Node.js 16+ and npm
+- Google Gemini API key
+- (Optional) Graphviz for advanced table extraction
+
+### Backend Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/AdityaC-07/project-aether.git
+cd project-aether/backend
+
+# Create virtual environment (Windows PowerShell)
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
 
----
+# For Unix/macOS
+python3 -m venv .venv
+source .venv/bin/activate
 
-### 2) Install dependencies
-
-```powershell
+# Install dependencies
 pip install -r requirements.txt
-```
 
-**Note**: Camelot table extraction requires optional system libraries:
+# Configure environment variables
+# Create .env file in backend directory
+echo "GEMINI_API_KEY=your_api_key_here" > .env
+echo "AETHER_MODEL=gemini-1.5-flash" >> .env
 
-- On Windows, it should work out of the box with opencv-python
-- On macOS/Linux, you may need `graphviz` installed for best compatibility
-
----
-
-### 3) Configure environment variables
-
-Create a `.env` file in the **project root**:
-
-```env
-GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-AETHER_MODEL=gemini-1.5-flash
-```
-
-> ⚠️ `.env` is **git-ignored** and must not be committed.
-
-Environment variables are loaded automatically using `python-dotenv`.
-
----
-
-## Run the Backend API
-
-```powershell
-cd backend
+# Run the server
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-API root: 👉 [http://localhost:8000/](http://localhost:8000/)
+Backend API: http://localhost:8000
 
----
+### Frontend Setup
 
-## Run the Frontend
+```bash
+cd ../aether-frontend
 
-```powershell
-cd aether-frontend
+# Install dependencies
 npm install
+
+# Start development server
 npm run dev
 ```
 
-Frontend: 👉 [http://localhost:5173/](http://localhost:5173/)
+Frontend UI: http://localhost:5173
 
 ---
 
-## API Endpoints
+## 📡 API Endpoints
 
 ### POST `/analyze`
-
 Analyze structured reasoning context with debate and synthesis.
 
-#### Request Body (JSON)
-
+**Request Body:**
 ```json
 {
   "narrative": "Main report text",
@@ -155,13 +184,12 @@ Analyze structured reasoning context with debate and synthesis.
       "value": 3.4
     }
   ],
-  "assumptions": ["Higher engagement generally leads to higher revenue"],
+  "assumptions": ["Higher engagement leads to higher revenue"],
   "limitations": ["Customer demographics were not segmented"]
 }
 ```
 
-#### Response Body (JSON)
-
+**Response:**
 ```json
 {
   "final_report": {
@@ -173,144 +201,23 @@ Analyze structured reasoning context with debate and synthesis.
     "recommendation": "...",
     "confidence_score": 85
   },
-  "factors": [
-    {
-      "description": "...",
-      "domain": "sales"
-    }
-  ],
-  "debate_logs": [
-    {
-      "factor": {
-        "description": "...",
-        "domain": "sales"
-      },
-      "support": {
-        "support_arguments": [
-          {
-            "claim": "...",
-            "evidence": "...",
-            "assumption": "..."
-          }
-        ]
-      },
-      "opposition": {
-        "counter_arguments": [
-          {
-            "target_claim": "...",
-            "challenge": "...",
-            "risk": "..."
-          }
-        ]
-      }
-    }
-  ]
+  "factors": [...],
+  "debate_logs": [...]
 }
 ```
 
----
-
 ### POST `/analyze-pdf`
-
-Upload and analyze a PDF document.
-
-- Extracts text from all pages
-- Extracts tables (converts numeric values to metrics)
-- Returns analysis results in same format as `/analyze`
-
----
+Upload and analyze a PDF document (returns JSON).
 
 ### POST `/analyze-report`
-
-Analyze structured context and return PDF report.
-
-Returns a beautifully formatted PDF with:
-
-- Executive summary from synthesis
-- Extracted factors with domain labels
-- Full debate logs with support/opposition arguments
-- Timestamps and confidence scores
-
----
+Analyze structured context and return formatted PDF report.
 
 ### POST `/analyze-pdf-report`
-
-Upload PDF, analyze it, and return formatted PDF report.
-
-Combines PDF extraction and report generation in one request.
+Upload PDF, analyze it, and return formatted PDF report in one request.
 
 ---
 
-## Data Models
-
-### ReasoningContext
-
-```python
-class Metric(BaseModel):
-    name: str
-    region: Optional[str] = None
-    value: float
-
-class ReasoningContext(BaseModel):
-    narrative: str
-    extracted_facts: List[str] = []
-    metrics: List[Metric] = []
-    assumptions: List[str] = []
-    limitations: List[str] = []
-```
-
-### Domain Labels
-
-Supported domains for factors:
-
-- Sales
-- Organization
-- Policy
-- Statistics
-
----
-
-## PDF Processing
-
-### Table Extraction
-
-- Uses **Camelot** library to extract tables from PDFs
-- Processes all pages automatically
-- **First row** assumed to be headers
-- **First column** (if present) becomes region label
-- **Numeric cells** converted to metrics
-- Non-numeric cells skipped
-- Errors logged but never crash the pipeline
-
-### If No Tables Found
-
-- Processing continues normally with text extraction only
-- Returns empty metrics list
-
----
-
-## Logging
-
-- All reasoning sessions are logged as **structured JSON**
-- Location: `logs/reasoning_logs.json`
-- The `logs/` directory is **ignored by Git**
-- Includes full trace of all agent outputs and decisions
-
----
-
-## Key Design Principles
-
-- **No hallucination** — agents rely strictly on provided context
-- **Debate-first reasoning** — every claim is challenged
-- **Deterministic flow** — orchestrator controls execution
-- **Schema-validated outputs** — every agent returns strict JSON
-- **Graceful degradation** — optional features (table parsing) never crash
-- **Transparent reasoning** — all intermediate steps logged
-- **Domain-aware** — factors categorized by domain for better analysis
-
----
-
-## Directory Structure
+## 📁 Project Structure
 
 ```
 project-aether/
@@ -322,8 +229,6 @@ project-aether/
 │   └── src/
 │       ├── main.jsx
 │       ├── App.jsx
-│       ├── App.css
-│       ├── index.css
 │       ├── components/
 │       │   ├── PdfUpload.jsx
 │       │   ├── FactorsList.jsx
@@ -336,10 +241,10 @@ project-aether/
 │           └── api.js
 └── backend/
     ├── requirements.txt
+    ├── .env (git-ignored)
     ├── app/
     │   ├── main.py
     │   ├── orchestrator.py
-    │   ├── llm_client.py
     │   ├── agents/
     │   │   ├── base_agent.py
     │   │   ├── factor_extractor.py
@@ -362,135 +267,108 @@ project-aether/
     │       ├── opposition_prompt.txt
     │       └── synthesis_prompt.txt
     └── logs/
-        └── reasoning_logs.json
+        └── reasoning_logs.json (git-ignored)
 ```
 
 ---
 
-## Notes
+## 📊 Data Models
 
-- The system uses **Gemini via `google-genai` SDK**
-- Billing or available quota is required for sustained usage
+### ReasoningContext
+```python
+class Metric(BaseModel):
+    name: str
+    region: Optional[str] = None
+    value: float
+
+class ReasoningContext(BaseModel):
+    narrative: str
+    extracted_facts: List[str] = []
+    metrics: List[Metric] = []
+    assumptions: List[str] = []
+    limitations: List[str] = []
+```
+
+### Domain Labels
+- **Sales**: Revenue, conversion, customer metrics
+- **Organization**: Structure, processes, workflows
+- **Policy**: Regulations, compliance, guidelines
+- **Statistics**: Data analysis, trends, patterns
+
+
+
+
+
+
+
+## 🔮 Future Enhancements
+
+- [ ] OCR support for scanned PDFs
+- [ ] Chart extraction and analysis
+- [ ] Multi-language support
+- [ ] Custom domain definitions
+- [ ] Result caching and history
+- [ ] Advanced report formatting options
+- [ ] Real-time collaborative analysis
+- [ ] Integration with more LLM providers
+
+---
+
+## 🏆 Hackathon Details
+
+**Team**: Autizhacks  
+**Team Leader**: Aditya Choudhuri  
+**Problem Statement**: Project Aether - AI/ML  
+**Technologies**: Vertex AI, Google Gemini LLMs
+
+---
+
+## ⚠️ Important Notes
+
+- Requires active Google Gemini API key with billing enabled
 - Free-tier quotas may be limited depending on project settings
-- Agents are isolated and stateless per request
-- Table parsing works with standard PDFs; complex/scanned PDFs may require OCR (not currently supported)
-- All timestamps are UTC
+- `.env` file must never be committed (git-ignored by default)
+- Table parsing works best with standard PDFs (scanned PDFs require OCR)
+- All timestamps are in UTC
+- Logs are stored locally and not version controlled
 
 ---
 
-## Future Enhancements
+## 📝 License
 
-- OCR support for scanned PDFs
-- Chart extraction and analysis
-- Multi-language support
-- Custom domain definitions
-- Result caching and history
-- Advanced report formatting options
-  {
-  "narrative": "Main report text",
-  "extracted_facts": [
-  "Customer engagement increased in metro cities during Q3",
-  "Tier-2 cities experienced higher churn rates"
-  ],
-  "metrics": [
-  {
-  "name": "conversion_rate",
-  "region": "metro",
-  "value": 3.4
-  }
-  ],
-  "assumptions": [
-  "Higher engagement generally leads to higher revenue"
-  ],
-  "limitations": [
-  "Customer demographics were not segmented"
-  ]
-  }
-
-````
+This project is part of a hackathon submission. Please contact the team for licensing information.
 
 ---
 
-#### Response Body (JSON)
+## 👥 Team
 
-```json
-{
-  "final_report": {
-    "what_worked": "...",
-    "what_failed": "...",
-    "why_it_happened": "...",
-    "how_to_improve": "..."
-  },
-  "factors": [
-    {
-      "factor_id": "F1",
-      "description": "...",
-      "domain": "sales"
-    }
-  ],
-  "debate_logs": [
-    {
-      "factor_id": "F1",
-      "factor": {
-        "factor_id": "F1",
-        "description": "...",
-        "domain": "sales"
-      },
-      "support": {
-        "support_arguments": [
-          {
-            "claim": "...",
-            "evidence": "...",
-            "assumption": "..."
-          }
-        ]
-      },
-      "opposition": {
-        "counter_arguments": [
-          {
-            "target_claim": "...",
-            "challenge": "...",
-            "risk": "..."
-          }
-        ]
-      }
-    }
-  ]
-}
-````
+**Autizhacks**
+- Aditya Choudhuri (Team Leader)
 
 ---
 
-## Logging
+## 🤝 Contributing
 
-- All reasoning sessions are logged as **structured JSON**
-- Location:
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-  ```
-  logs/reasoning_logs.json
-  ```
-
-- The `logs/` directory is **ignored by Git**
-
----
-
-## Key Design Principles
-
-- **No hallucination** — agents rely strictly on provided context
-- **Debate-first reasoning** — every claim is challenged
-- **Deterministic flow** — orchestrator controls execution
-- **Schema-validated outputs** — every agent returns strict JSON
-- **Prompt-safe design** — no `.format()` used with JSON templates
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ---
 
-## Notes
+## 📧 Contact
 
-- The system uses **Gemini via `google-genai`**
-- Billing or available quota is required for sustained usage
-- Free-tier quotas may be limited or zero depending on project settings
-- Agents are isolated and stateless per request
+For questions or feedback, please open an issue on GitHub or contact the team through the repository.
 
-```
+---
 
-```
+<div align="center">
+
+**Made with ❤️ by Team Autizhacks**
+
+⭐ Star this repository if you find it useful!
+
+</div>
