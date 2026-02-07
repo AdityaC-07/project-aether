@@ -1,5 +1,12 @@
 # Project AETHER
 
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18+-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Google Gemini](https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Vertex AI](https://img.shields.io/badge/Vertex_AI-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white)](https://cloud.google.com/vertex-ai)
+
 Coordinator-driven **multi-agent AI system** for structured debate, opposition, and synthesis over a normalized reasoning context.
 
 The system extracts debatable factors, argues for and against them using independent agents, and synthesizes a transparent final report — all orchestrated deterministically.
@@ -32,9 +39,9 @@ The system extracts debatable factors, argues for and against them using indepen
 
 ## Tech Stack
 
-- **Backend**: Python 3.10+, FastAPI, Pydantic v2, Gemini API
-- **Frontend**: React 18+, Vite, CSS
-- **Data Processing**: PyPDF2, Camelot (table extraction), OpenCV
+- **Backend**: Python 3.10+, FastAPI, Pydantic v2, Gemini via Vertex AI (google-genai)
+- **Frontend**: React 19+, Vite, CSS
+- **Data Processing**: PyPDF2, Camelot (table extraction)
 - **Async**: async/await architecture
 - **Logging**: Structured JSON logging
 - **PDF Generation**: ReportLab
@@ -90,23 +97,26 @@ pip install -r requirements.txt
 
 **Note**: Camelot table extraction requires optional system libraries:
 
-- On Windows, it should work out of the box with opencv-python
+- On Windows, it should work out of the box
 - On macOS/Linux, you may need `graphviz` installed for best compatibility
 
 ---
 
 ### 3) Configure environment variables
 
-Create a `.env` file in the **project root**:
+Create a `.env` file in the **project root** or `backend/` (Vertex AI via ADC):
 
 ```env
-GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-AETHER_MODEL=gemini-1.5-flash
+GCP_PROJECT=YOUR_GCP_PROJECT_ID
+GCP_LOCATION=us-central1
+GEMINI_MODEL=gemini-2.5-pro
 ```
 
 > ⚠️ `.env` is **git-ignored** and must not be committed.
 
 Environment variables are loaded automatically using `python-dotenv`.
+
+Make sure ADC is configured (for example, `gcloud auth application-default login` or a service account).
 
 ---
 
@@ -117,19 +127,25 @@ cd backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-API root: 👉 [http://localhost:8000/](http://localhost:8000/)
+API root: 👉 http://localhost:8000/
 
 ---
 
 ## Run the Frontend
 
 ```powershell
-cd aether-frontend
+cd frontend
 npm install
 npm run dev
 ```
 
-Frontend: 👉 [http://localhost:5173/](http://localhost:5173/)
+Frontend: 👉 http://localhost:5173/
+
+Optional frontend API base override (create `frontend/.env`):
+
+```env
+VITE_API_BASE=http://localhost:8000
+```
 
 ---
 
@@ -175,13 +191,16 @@ Analyze structured reasoning context with debate and synthesis.
   },
   "factors": [
     {
+      "factor_id": "F1",
       "description": "...",
       "domain": "sales"
     }
   ],
   "debate_logs": [
     {
+      "factor_id": "F1",
       "factor": {
+        "factor_id": "F1",
         "description": "...",
         "domain": "sales"
       },
@@ -241,6 +260,18 @@ Combines PDF extraction and report generation in one request.
 
 ---
 
+### GET `/status`
+
+Returns the current orchestration phase and status metadata.
+
+---
+
+### GET `/download-report`
+
+Returns a PDF report for the most recent analysis (without re-running).
+
+---
+
 ## Data Models
 
 ### ReasoningContext
@@ -263,10 +294,10 @@ class ReasoningContext(BaseModel):
 
 Supported domains for factors:
 
-- Sales
-- Organization
-- Policy
-- Statistics
+- sales
+- organization
+- policy
+- statistics
 
 ---
 
@@ -315,7 +346,7 @@ Supported domains for factors:
 ```
 project-aether/
 ├── README.md
-├── aether-frontend/
+├── frontend/
 │   ├── package.json
 │   ├── vite.config.js
 │   ├── index.html
@@ -339,7 +370,6 @@ project-aether/
     ├── app/
     │   ├── main.py
     │   ├── orchestrator.py
-    │   ├── llm_client.py
     │   ├── agents/
     │   │   ├── base_agent.py
     │   │   ├── factor_extractor.py
@@ -369,12 +399,13 @@ project-aether/
 
 ## Notes
 
-- The system uses **Gemini via `google-genai` SDK**
+- The system uses **Gemini via Vertex AI (`google-genai` SDK)**
 - Billing or available quota is required for sustained usage
 - Free-tier quotas may be limited depending on project settings
 - Agents are isolated and stateless per request
 - Table parsing works with standard PDFs; complex/scanned PDFs may require OCR (not currently supported)
 - All timestamps are UTC
+- `.env` files must never be committed (git-ignored by default)
 
 ---
 
@@ -386,111 +417,5 @@ project-aether/
 - Custom domain definitions
 - Result caching and history
 - Advanced report formatting options
-  {
-  "narrative": "Main report text",
-  "extracted_facts": [
-  "Customer engagement increased in metro cities during Q3",
-  "Tier-2 cities experienced higher churn rates"
-  ],
-  "metrics": [
-  {
-  "name": "conversion_rate",
-  "region": "metro",
-  "value": 3.4
-  }
-  ],
-  "assumptions": [
-  "Higher engagement generally leads to higher revenue"
-  ],
-  "limitations": [
-  "Customer demographics were not segmented"
-  ]
-  }
-
-````
-
----
-
-#### Response Body (JSON)
-
-```json
-{
-  "final_report": {
-    "what_worked": "...",
-    "what_failed": "...",
-    "why_it_happened": "...",
-    "how_to_improve": "..."
-  },
-  "factors": [
-    {
-      "factor_id": "F1",
-      "description": "...",
-      "domain": "sales"
-    }
-  ],
-  "debate_logs": [
-    {
-      "factor_id": "F1",
-      "factor": {
-        "factor_id": "F1",
-        "description": "...",
-        "domain": "sales"
-      },
-      "support": {
-        "support_arguments": [
-          {
-            "claim": "...",
-            "evidence": "...",
-            "assumption": "..."
-          }
-        ]
-      },
-      "opposition": {
-        "counter_arguments": [
-          {
-            "target_claim": "...",
-            "challenge": "...",
-            "risk": "..."
-          }
-        ]
-      }
-    }
-  ]
-}
-````
-
----
-
-## Logging
-
-- All reasoning sessions are logged as **structured JSON**
-- Location:
-
-  ```
-  logs/reasoning_logs.json
-  ```
-
-- The `logs/` directory is **ignored by Git**
-
----
-
-## Key Design Principles
-
-- **No hallucination** — agents rely strictly on provided context
-- **Debate-first reasoning** — every claim is challenged
-- **Deterministic flow** — orchestrator controls execution
-- **Schema-validated outputs** — every agent returns strict JSON
-- **Prompt-safe design** — no `.format()` used with JSON templates
-
----
-
-## Notes
-
-- The system uses **Gemini via `google-genai`**
-- Billing or available quota is required for sustained usage
-- Free-tier quotas may be limited or zero depending on project settings
-- Agents are isolated and stateless per request
-
-```
-
-```
+- Real-time collaborative analysis
+- Integration with more LLM providers

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -12,11 +13,12 @@ class LLMClient:
     """Gemini client using Vertex AI (OAuth / ADC)."""
 
     def __init__(self) -> None:
-        self.model = os.getenv("AETHER_MODEL", "gemini-1.5-flash")
-
+        self.model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+        
+        # Use Vertex AI with ADC (Application Default Credentials)
         self.client = genai.Client(
-            vertexai=True,                    # 🔑 THIS IS REQUIRED
-            project=os.getenv("GCP_PROJECT"), # optional but recommended
+            vertexai=True,
+            project=os.getenv("GCP_PROJECT"),
             location=os.getenv("GCP_LOCATION", "us-central1"),
         )
 
@@ -27,7 +29,8 @@ class LLMClient:
 
         full_prompt = f"{system_msg}\n\n{prompt}"
 
-        response = self.client.models.generate_content(
+        response = await asyncio.to_thread(
+            self.client.models.generate_content,
             model=self.model,
             contents=full_prompt,
             config={"temperature": 0.2},

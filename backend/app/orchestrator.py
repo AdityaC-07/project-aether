@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -28,6 +29,21 @@ class AetherOrchestrator:
         self.logs_dir = Path(__file__).resolve().parents[1] / "logs"
         self.log_file = self.logs_dir / "reasoning_logs.json"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
+        self.status: Dict[str, Any] = {
+            "phase": "idle",
+            "message": "Idle",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+        self.last_result: Dict[str, Any] | None = None
+        self.last_narrative: str | None = None
+
+    def _set_status(self, phase: str, message: str, **details: Any) -> None:
+        self.status = {
+            "phase": phase,
+            "message": message,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            **details,
+        }
 
     def _calculate_confidence(self, debate_logs: List[DebateTrace], final_report: FinalReport) -> float:
         """Calculate confidence score based on debate analysis quality and balance."""
@@ -61,45 +77,90 @@ class AetherOrchestrator:
         return round(min(avg_score, 100), 1)
 
     async def analyze(self, context: ReasoningContext) -> Dict[str, Any]:
-        # 1) Factor extraction
-        factors: List[Factor] = await self.factor_extractor.extract_factors(context)
+        try:
+            # 1) Factor extraction
+            self._set_status("extracting", "Extracting factors")
+            print("\n[ORCHESTRATOR] Starting factor extraction...")
+            factors: List[Factor] = await self.factor_extractor.extract_factors(context)
+            print(f"[ORCHESTRATOR] Extracted {len(factors)} factors")
+            await asyncio.sleep(2)  # Rate limit prevention
 
-        # 2) For each factor → support then opposition
-        debate_logs: List[DebateTrace] = []
-        for factor in factors:
-            support: SupportArguments = await self.support_agent.generate_support(factor, context)
-            opposition: OppositionCounterArguments = await self.opposition_agent.generate_counters(
-                factor, support
+            # 2) For each factor → support then opposition
+            debate_logs: List[DebateTrace] = []
+            total_factors = len(factors)
+            for i, factor in enumerate(factors, 1):
+                print(f"\n[ORCHESTRATOR] Processing factor {i}/{total_factors}: {factor.factor_id}")
+
+                self._set_status(
+                    "support",
+                    f"Generating support for {factor.factor_id}",
+                    factor_index=i,
+                    factor_total=total_factors,
+                    factor_id=factor.factor_id,
+                )
+                print(f"  → Generating support arguments...")
+                support: SupportArguments = await self.support_agent.generate_support(factor, context)
+                print(f"  → Support generated: {len(support.support_arguments)} arguments")
+                await asyncio.sleep(2)  # Rate limit prevention
+
+                self._set_status(
+                    "opposition",
+                    f"Generating opposition for {factor.factor_id}",
+                    factor_index=i,
+                    factor_total=total_factors,
+                    factor_id=factor.factor_id,
+                )
+                print(f"  → Generating opposition arguments...")
+                opposition: OppositionCounterArguments = await self.opposition_agent.generate_counters(
+                    factor, support
+                )
+                print(f"  → Opposition generated: {len(opposition.counter_arguments)} arguments")
+                await asyncio.sleep(2)  # Rate limit prevention
+
+                debate = DebateTrace(
+                    factor_id=factor.factor_id,
+                    factor=factor,
+                    support=support,
+                    opposition=opposition,
+                )
+                debate_logs.append(debate)
+
+            # 3) Synthesis
+            self._set_status("synthesizing", "Synthesizing final report")
+            print("\n[ORCHESTRATOR] Starting synthesis...")
+            final_report: FinalReport = await self.synthesizer_agent.generate_report(context, debate_logs)
+            print("[ORCHESTRATOR] Synthesis complete")
+
+            # Calculate confidence score based on debate balance
+            confidence_score = self._calculate_confidence(debate_logs, final_report)
+            final_report.confidence_score = confidence_score
+
+            # 4) Persist logs (structured, readable)
+            session_log: Dict[str, Any] = {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "input_context": context.dict(),
+                "factors": [f.dict() for f in factors],
+                "debate_logs": [d.dict() for d in debate_logs],
+                "final_report": final_report.dict(),
+            }
+            ReasoningLogger.save_session(session_log, self.log_file)
+
+            self._set_status(
+                "done",
+                "Analysis complete",
+                factor_total=total_factors,
             )
 
-            debate = DebateTrace(
-                factor_id=factor.factor_id,
-                factor=factor,
-                support=support,
-                opposition=opposition,
-            )
-            debate_logs.append(debate)
+            response_payload = {
+                "final_report": final_report.dict(),
+                "factors": [f.dict() for f in factors],
+                "debate_logs": [d.dict() for d in debate_logs],
+            }
+            self.last_result = response_payload
+            self.last_narrative = context.narrative
 
-        # 3) Synthesis
-        final_report: FinalReport = await self.synthesizer_agent.generate_report(context, debate_logs)
-
-        # Calculate confidence score based on debate balance
-        confidence_score = self._calculate_confidence(debate_logs, final_report)
-        final_report.confidence_score = confidence_score
-
-        # 4) Persist logs (structured, readable)
-        session_log: Dict[str, Any] = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "input_context": context.dict(),
-            "factors": [f.dict() for f in factors],
-            "debate_logs": [d.dict() for d in debate_logs],
-            "final_report": final_report.dict(),
-        }
-        ReasoningLogger.save_session(session_log, self.log_file)
-
-        # 5) API response
-        return {
-            "final_report": final_report.dict(),
-            "factors": [f.dict() for f in factors],
-            "debate_logs": [d.dict() for d in debate_logs],
-        }
+            # 5) API response
+            return response_payload
+        except Exception as exc:
+            self._set_status("error", f"Error: {exc}")
+            raise

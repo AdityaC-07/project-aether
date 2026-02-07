@@ -70,6 +70,11 @@ async def root():
     return {"service": "Project AETHER", "status": "ok"}
 
 
+@app.get("/status")
+async def status():
+    return orchestrator.status
+
+
 @app.post("/analyze-report")
 async def analyze_report(context: ReasoningContext):
     """Analyze text context and return PDF report."""
@@ -80,7 +85,7 @@ async def analyze_report(context: ReasoningContext):
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=AETHER_Analysis_Report.pdf"}
+            headers={"Content-Disposition": "attachment; filename=Analysis_Report.pdf"}
         )
     except HTTPException:
         raise
@@ -113,11 +118,36 @@ async def analyze_pdf_report(file: UploadFile = File(...)):
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=AETHER_PDF_Analysis_Report.pdf"}
+            headers={"Content-Disposition": "attachment; filename=PDF_Analysis_Report.pdf"}
         )
     except HTTPException:
         raise
     except Exception as e:
         print("\nEXCEPTION IN /analyze-pdf-report")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/download-report")
+async def download_report():
+    """Return PDF report for the most recent analysis without re-running."""
+    try:
+        if not orchestrator.last_result or not orchestrator.last_narrative:
+            raise HTTPException(status_code=400, detail="No analysis available for report download")
+
+        pdf_bytes = pdf_generator.generate_report(
+            orchestrator.last_result,
+            orchestrator.last_narrative,
+        )
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=Analysis_Report.pdf"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("\nEXCEPTION IN /download-report")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

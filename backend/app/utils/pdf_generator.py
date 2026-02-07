@@ -98,42 +98,42 @@ class AETHERPDFGenerator:
             # What Worked
             what_worked = final_report.get('what_worked', '')
             if what_worked:
-                story.append(Paragraph("<b>✅ What Worked:</b>", self.styles['Normal']))
+                story.append(Paragraph("<b>What Worked:</b>", self.styles['Normal']))
                 story.append(Paragraph(what_worked, self.styles['AetherBodyText']))
                 story.append(Spacer(1, 0.15*inch))
             
             # What Failed
             what_failed = final_report.get('what_failed', '')
             if what_failed:
-                story.append(Paragraph("<b>❌ What Failed:</b>", self.styles['Normal']))
+                story.append(Paragraph("<b>What Failed:</b>", self.styles['Normal']))
                 story.append(Paragraph(what_failed, self.styles['AetherBodyText']))
                 story.append(Spacer(1, 0.15*inch))
             
             # Why It Happened
             why_it_happened = final_report.get('why_it_happened', '')
             if why_it_happened:
-                story.append(Paragraph("<b>🔍 Why It Happened:</b>", self.styles['Normal']))
+                story.append(Paragraph("<b>Why It Happened:</b>", self.styles['Normal']))
                 story.append(Paragraph(why_it_happened, self.styles['AetherBodyText']))
                 story.append(Spacer(1, 0.15*inch))
             
             # How to Improve
             how_to_improve = final_report.get('how_to_improve', '')
             if how_to_improve:
-                story.append(Paragraph("<b>💡 How to Improve:</b>", self.styles['Normal']))
+                story.append(Paragraph("<b>How to Improve:</b>", self.styles['Normal']))
                 story.append(Paragraph(how_to_improve, self.styles['AetherBodyText']))
                 story.append(Spacer(1, 0.15*inch))
             
             # Synthesis
             synthesis = final_report.get('synthesis', '')
             if synthesis:
-                story.append(Paragraph("<b>📊 Synthesis:</b>", self.styles['Normal']))
+                story.append(Paragraph("<b>Synthesis:</b>", self.styles['Normal']))
                 story.append(Paragraph(synthesis, self.styles['AetherBodyText']))
                 story.append(Spacer(1, 0.15*inch))
             
             # Recommendation
             recommendation = final_report.get('recommendation', '')
             if recommendation:
-                story.append(Paragraph("<b>🎯 Recommendation:</b>", self.styles['Normal']))
+                story.append(Paragraph("<b>Recommendation:</b>", self.styles['Normal']))
                 story.append(Paragraph(recommendation, self.styles['AetherBodyText']))
                 story.append(Spacer(1, 0.3*inch))
 

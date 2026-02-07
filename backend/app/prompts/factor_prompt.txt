@@ -4,7 +4,7 @@ Output strictly as minified JSON with the following shape:
 {{"factors":[{{"factor_id":"F1","description":"...","domain":"sales|statistics|policy|organization"}}]}}
 
 Rules:
-- Provide up to 3–6 meaningful factors. If fewer are justified, return fewer.
+- Provide up to maximum 4 meaningful factors. If fewer are justified, return fewer.
 - factor_id must be unique and incremental like F1, F2, ...
 - domain must be one of: sales, statistics, policy, organization (lowercase).
 - Use only information present in the context.
