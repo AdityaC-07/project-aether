@@ -29,13 +29,17 @@ class PromptRegistry:
         self,
         versions_dir: Optional[Path] = None,
         active_versions_file: Optional[Path] = None,
+        active_overrides: Optional[Dict[str, str]] = None,
     ) -> None:
         self.versions_dir = Path(versions_dir) if versions_dir else Path(__file__).resolve().parent / "versions"
         self.active_versions_file = active_versions_file or self.versions_dir.parent / "active_versions.json"
 
         self._by_key: Dict[tuple[str, str], PromptTemplate] = {}
         self._active_overrides: Dict[str, str] = {}
-        self._load_active_overrides()
+        if active_overrides is not None:
+            self._active_overrides = {str(k): str(v) for k, v in active_overrides.items()}
+        else:
+            self._load_active_overrides()
         self._load_templates()
 
     def _load_active_overrides(self) -> None:

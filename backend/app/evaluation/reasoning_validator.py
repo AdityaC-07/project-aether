@@ -98,11 +98,18 @@ class ReasoningValidator:
                     )
 
             if index > 1:
-                link = token_overlap_ratio(step.thought, steps[index - 2].conclusion)
+                previous = steps[index - 2]
+                # A step builds on its predecessor if its thought references
+                # the prior conclusion OR the prior evidence (steps commonly
+                # echo the evidence they extend rather than the conclusion).
+                link = max(
+                    token_overlap_ratio(step.thought, previous.conclusion),
+                    token_overlap_ratio(step.thought, previous.evidence),
+                )
                 if link < self.MIN_CHAIN_LINK:
                     warnings.append(
-                        f"step {step.step_index} does not build on the previous step's "
-                        f"conclusion (link {link:.2f})"
+                        f"step {step.step_index} does not build on the previous step "
+                        f"(weak link to its evidence or conclusion, overlap {link:.2f})"
                     )
 
             status: Literal["valid", "warning", "invalid"]

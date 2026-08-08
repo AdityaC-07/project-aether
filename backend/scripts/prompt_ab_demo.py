@@ -1,8 +1,11 @@
-"""A/B demo: compare two versions of the support prompt end-to-end.
+"""A/B demo: compare three versions of the support prompt end-to-end.
 
 Runs without a live LLM (uses canned responses) so anyone can see the full
 pipeline: versioned template resolution -> domain-adaptive few-shot rendering
--> metric evaluation -> run tracking -> ranked performance report.
+-> chain-of-thought validation -> metric evaluation -> run tracking ->
+ranked performance report.
+
+Arms: v1 (vague baseline), v2 (quantified, no CoT), v3 (quantified + CoT).
 
 Usage: python scripts/prompt_ab_demo.py
 """
@@ -13,17 +16,22 @@ import json
 import sys
 from pathlib import Path
 
-from pydantic import BaseModel
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.evaluation import PromptRun, PromptTracker, ReportGenerator  # noqa: E402
+from app.evaluation import (  # noqa: E402
+    PromptRun,
+    PromptTracker,
+    ReasoningValidator,
+    ReportGenerator,
+)
 from app.prompts import PromptRegistry  # noqa: E402
 from app.schemas.context import ReasoningContext  # noqa: E402
 from app.schemas.debate import SupportArguments  # noqa: E402
 from app.schemas.factor import DomainEnum, Factor  # noqa: E402
+from app.schemas.reasoning import ReasoningStep  # noqa: E402
 
-# Simulated LLM responses: v1 is vague/generic, v2 is quantified and grounded.
+# Simulated LLM responses: v1 is vague/generic, v2 is quantified and grounded,
+# v3 adds an explicit chain-of-thought plus per-argument rationale.
 CANNED_OUTPUTS = {
     ("1.0.0", "sales"): {
         "support_arguments": [
@@ -61,6 +69,66 @@ CANNED_OUTPUTS = {
             }
         ]
     },
+    ("3.0.0", "sales"): {
+        "reasoning": [
+            {
+                "step_index": 1,
+                "thought": "Revenue fell and deal count fell, so I test whether volume, not price, explains the drop",
+                "evidence": "Deal count dropped from 210 to 140 while revenue fell 12% QoQ",
+                "conclusion": "Volume decline dominates the revenue loss",
+            },
+            {
+                "step_index": 2,
+                "thought": "A fair case must also weigh the offsetting 8% rise in average deal size",
+                "evidence": "Average deal size grew 8% to $18k in the same quarter",
+                "conclusion": "The size gain partially compensates the volume loss",
+            },
+        ],
+        "support_arguments": [
+            {
+                "claim": "Deal count fell by 70 (33%), the dominant driver of the 12% QoQ revenue drop",
+                "evidence": "Deal count dropped from 210 to 140 in the same period revenue fell 12% QoQ",
+                "assumption": "Average deal size stayed near $18k",
+                "rationale": "Step 1",
+            },
+            {
+                "claim": "The lost revenue was only partially offset by larger average deal size",
+                "evidence": "Average deal size grew 8% to $18k while deal count fell 33%",
+                "assumption": "No promotional pricing lifted average size",
+                "rationale": "Step 2",
+            },
+        ],
+    },
+    ("3.0.0", "policy"): {
+        "reasoning": [
+            {
+                "step_index": 1,
+                "thought": "The policy change widens the ceiling, so I check which firms actually cross the new limit",
+                "evidence": "Cap raised from $2M to $3M per firm with roughly 120 firms affected",
+                "conclusion": "Mid-size firms near the old cap gain the most",
+            },
+            {
+                "step_index": 2,
+                "thought": "Access gains must be checked against the 30-FTE eligibility floor",
+                "evidence": "Eligibility now requires 30 full-time staff",
+                "conclusion": "The floor could exclude some target firms, softening the access claim",
+            },
+        ],
+        "support_arguments": [
+            {
+                "claim": "The 50% cap increase ($2M to $3M) expands eligible spend for affected firms",
+                "evidence": "Cap raised from $2M to $3M per firm; roughly 120 firms affected",
+                "assumption": "Firms at the old cap can absorb a larger draw",
+                "rationale": "Step 1",
+            },
+            {
+                "claim": "Access improves primarily for firms at or near the previous ceiling",
+                "evidence": "Roughly 120 firms are affected by the change",
+                "assumption": "The 30-FTE floor does not exclude these firms",
+                "rationale": "Step 2",
+            },
+        ],
+    },
 }
 
 CONTEXT_TEXT = (
@@ -91,7 +159,7 @@ def main() -> None:
 
     context = ReasoningContext(narrative=CONTEXT_TEXT)
     factors = [f for f in FACTORS]
-    experiments = [("1.0.0", 6), ("2.0.0", 6)]  # version -> number of simulated runs
+    experiments = [("1.0.0", 6), ("2.0.0", 6), ("3.0.0", 6)]  # version -> simulated runs
 
     print("Resolving versions from registry:")
     print(f"  deployed support version: {registry.get('support').version}")
@@ -126,6 +194,13 @@ def main() -> None:
                 raw_output=raw_output,
             )
             run.evaluate(context_text=CONTEXT_TEXT, expected_schema=SCHEMA)
+            if version == "3.0.0":
+                steps = [
+                    ReasoningStep(**s) for s in canned.get("reasoning", [])
+                ]
+                run.validation = ReasoningValidator().validate_steps(
+                    steps, CONTEXT_TEXT, arguments=canned.get("support_arguments")
+                )
             tracker.log(run)
             runs.append(run)
 

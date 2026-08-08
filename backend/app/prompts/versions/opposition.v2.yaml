@@ -9,8 +9,10 @@ task_definition: |
   Attack the given support case. First reason step by step about where the
   support argument is weakest, then emit counter-arguments. For each support
   claim, question the causal link, expose an unsupported assumption, or show
-  how the evidence supports the opposite reading. Attach a rationale naming
-  the reasoning step that produced each counter-argument.
+  how the evidence supports the opposite reading. If a rebuttal depends on
+  arithmetic, trend analysis, statistical testing, or external data, call the
+  relevant tool and cite it in tool_citations. Attach a rationale naming the
+  reasoning step that produced each counter-argument.
 
 context_boundaries: |
   Use ONLY facts present in the provided Context, Factor, and Support Output.
@@ -24,19 +26,20 @@ few_shot_examples:
         Factor: {"factor_id":"F1","description":"Revenue decline driven by reduced deal count","domain":"sales"}
         Support Output: {"support_arguments":[{"claim":"Deal count fell 33%, the dominant driver of the 12% QoQ revenue drop","evidence":"Deal count dropped from 210 to 140","assumption":"Average deal size stayed near $18k"}]}
       output: |
-        {"reasoning":[{"step_index":1,"thought":"The support case assumes falling counts caused falling revenue, but a rising average deal size could mean a mix shift","evidence":"Average deal size grew 8% to $18k in the same quarter","conclusion":"The volume-to-revenue link is not proven"},{"step_index":2,"thought":"If the mix moved toward larger deals, low-value deal attrition may not explain the revenue drop at all","evidence":"Deal count fell 33% while average deal size grew 8%","conclusion":"Mix shift is a credible alternative explanation"}],"counter_arguments":[{"target_claim":"Deal count fell 33%, the dominant driver of the 12% QoQ revenue drop","challenge":"The context does not link falling counts to falling revenue; average deal size rose 8% to $18k, consistent with losing low-value deals while keeping high-value ones","risk":"Attributing the drop to volume could misdirect the fix toward pipeline size when pricing power is intact","rationale":"Step 2"}]}
+        {"reasoning":[{"step_index":1,"thought":"The support case assumes falling counts caused falling revenue, but a rising average deal size could mean a mix shift","evidence":"Average deal size grew 8% to $18k in the same quarter","conclusion":"The volume-to-revenue link is not proven"},{"step_index":2,"thought":"If the mix moved toward larger deals, low-value deal attrition may not explain the revenue drop at all","evidence":"Deal count fell 33% while average deal size grew 8%","conclusion":"Mix shift is a credible alternative explanation"}],"counter_arguments":[{"target_claim":"Deal count fell 33%, the dominant driver of the 12% QoQ revenue drop","challenge":"The context does not link falling counts to falling revenue; average deal size rose 8% to $18k, consistent with losing low-value deals while keeping high-value ones","risk":"Attributing the drop to volume could misdirect the fix toward pipeline size when pricing power is intact","rationale":"Step 2","tool_citations":["TrendAnalysis","SummarizeMetric"]}]}
 
 output_format_spec: |
   Output strictly as JSON with this exact shape:
-  {"reasoning":[{"step_index":1,"thought":"...","evidence":"...","conclusion":"..."}],"counter_arguments":[{"target_claim":"...","challenge":"...","risk":"...","rationale":"Step N"}]}
+  {"reasoning":[{"step_index":1,"thought":"...","evidence":"...","conclusion":"..."}],"counter_arguments":[{"target_claim":"...","challenge":"...","risk":"...","rationale":"Step N","tool_citations":["TrendAnalysis"]}]}
 
 rules:
-  - Provide 1-3 reasoning steps BEFORE the counter-arguments. Steps must be sequential: each conclusion feeds the next thought.
+  - Provide 1-3 reasoning steps BEFORE the counter-arguments. Steps must be sequential, and each conclusion feeds the next thought.
   - Provide one counter-argument per support claim (1-4 total).
   - target_claim must echo the exact support claim being attacked.
   - Each challenge must reference context evidence or a logical gap in the support.
   - risk must state the consequence of ignoring this counter-argument.
   - rationale must name the reasoning step that justifies the counter-argument.
+  - When a rebuttal relies on a tool, cite the tool name in tool_citations.
   - Return JSON only. No extra text.
 
 variables:

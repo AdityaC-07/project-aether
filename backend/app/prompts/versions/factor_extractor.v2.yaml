@@ -31,7 +31,7 @@ output_format_spec: |
   {"reasoning":[{"step_index":1,"thought":"...","evidence":"...","conclusion":"..."}],"factors":[{"factor_id":"F1","description":"...","domain":"sales|statistics|policy|organization"}]}
 
 rules:
-  - Produce 1-3 reasoning steps BEFORE the factors. Steps must be sequential: each conclusion feeds the next thought.
+  - Produce 1-3 reasoning steps BEFORE the factors. Steps must be sequential, and each conclusion feeds the next thought.
   - Every reasoning step must cite evidence found in the context.
   - factor_id must be unique and incremental, like F1, F2, ...
   - domain must be one of sales, statistics, policy, organization (lowercase).

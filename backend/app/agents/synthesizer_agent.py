@@ -10,6 +10,8 @@ from app.rag.models import RetrievalResult
 
 
 class SynthesizerAgent(BaseAgent):
+    TOOL_NAMES = ["summarize_metric", "trend_analysis", "statistical_test", "fetch_external_data"]
+
     async def generate_report(
         self,
         context: ReasoningContext,
@@ -25,19 +27,22 @@ class SynthesizerAgent(BaseAgent):
         )
 
         retrieval_text = self._format_retrieval_context(retrieval)
+        rendered = self._append_tooling_section(rendered, self.TOOL_NAMES)
         rendered = rendered.model_copy(
             update={
                 "text": f"{rendered.text}\n\n## Retrieved Context\n{retrieval_text}",
             }
         )
 
-        content = await self._complete(
+        content, tool_calls = await self._complete_with_tools(
             rendered,
             input_context={
                 "context": context.model_dump_json(),
                 "debates": debates_json,
                 "retrieval": retrieval.model_dump() if retrieval is not None else None,
             },
+            allowed_tools=self.TOOL_NAMES,
+            agent_name="synthesis",
         )
 
         context_text = f"{context.model_dump_json()}\n{debates_json}\n{retrieval_text}"

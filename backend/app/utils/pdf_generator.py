@@ -88,6 +88,34 @@ class AETHERPDFGenerator:
         final_report = analysis_result.get('final_report', {})
         confidence = final_report.get('confidence_score', 0)
         story.append(Paragraph(f"<b>Confidence Score:</b> {confidence}%", self.styles['Normal']))
+
+        # Nuanced confidence breakdown
+        confidence_report = final_report.get('confidence_report') or {}
+        if confidence_report:
+            synth_conf = confidence_report.get('synthesizer_confidence', 0)
+            breakdown = confidence_report.get('uncertainty_breakdown', {})
+            story.append(Paragraph(
+                f"<b>Synthesizer Confidence:</b> {synth_conf}% (consensus reached across the debate)",
+                self.styles['Normal']
+            ))
+            if breakdown:
+                breakdown_text = ", ".join(
+                    f"{key}: {value:.0%}" for key, value in breakdown.items()
+                )
+                story.append(Paragraph(f"<b>Uncertainty Breakdown:</b> {breakdown_text}", self.styles['Normal']))
+
+            uncertain_factors = confidence_report.get('uncertain_factors', [])
+            if uncertain_factors:
+                story.append(Paragraph("<b>Uncertain Factors:</b>", self.styles['Normal']))
+                for factor in uncertain_factors:
+                    story.append(Paragraph(
+                        f"&nbsp;&nbsp;{factor.get('factor_id', '')}: "
+                        f"confidence {factor.get('confidence', 0)}% "
+                        f"({factor.get('uncertainty_source', 'unknown')}, "
+                        f"magnitude {factor.get('magnitude', 0):.0%}) - "
+                        f"{factor.get('reason', '')}",
+                        self.styles['Normal'],
+                    ))
         story.append(Spacer(1, 0.3*inch))
 
         # Executive Summary Section (Final Report at the top)

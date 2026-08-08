@@ -10,8 +10,10 @@ from app.evaluation.tracker import PromptRun, PromptTracker
 from app.prompts import PromptRegistry, RenderedPrompt
 from app.schemas.factor import DomainEnum
 from app.schemas.reasoning import ReasoningStep
+from app.schemas.tooling import ToolInvocationRecord
 from app.rag.models import RetrievalContext, RetrievalResult
 from app.utils.llm_client import LLMClient
+from app.tools.registry import ToolRegistry
 
 
 class BaseAgent:
@@ -34,6 +36,7 @@ class BaseAgent:
         self.tracker = tracker or PromptTracker()
         self.prompts_dir = Path(__file__).resolve().parents[1] / "prompts"
         self.last_run: Optional[PromptRun] = None
+        self.tool_registry = ToolRegistry()
 
     def _read_prompt(self, filename: str) -> str:
         """Legacy raw-prompt loader, kept for compatibility with old flows."""
@@ -73,6 +76,49 @@ class BaseAgent:
             raw_output=content,
         )
         return content
+
+    def _append_tooling_section(self, rendered: RenderedPrompt, tool_names: Optional[List[str]] = None) -> RenderedPrompt:
+        tool_text = self.tool_registry.describe(tool_names)
+        if not tool_text:
+            return rendered
+        suffix = (
+            "\n\n## Tool Calling\n"
+            "If you need arithmetic, trends, statistical testing, or external data, call the relevant tool.\n"
+            "When an argument depends on tool output, cite the tool name in tool_citations.\n\n"
+            f"## Available Tools\n{tool_text}"
+        )
+        return rendered.model_copy(update={"text": f"{rendered.text}{suffix}"})
+
+    async def _complete_with_tools(
+        self,
+        rendered: RenderedPrompt,
+        *,
+        input_context: Optional[Dict[str, Any]] = None,
+        json_mode: bool = True,
+        allowed_tools: Optional[List[str]] = None,
+        agent_name: str = "agent",
+    ) -> tuple[str, List[ToolInvocationRecord]]:
+        result = await self.llm.acompletion_with_tools(
+            rendered.text,
+            registry=self.tool_registry,
+            allowed_tools=allowed_tools,
+            json_mode=json_mode,
+            agent_name=agent_name,
+        )
+
+        self.last_run = PromptRun(
+            prompt_name=rendered.name,
+            prompt_version=rendered.version,
+            domain=rendered.domain,
+            input_context={
+                **(input_context or {}),
+                "allowed_tools": allowed_tools or [],
+                "tool_calls": [call.model_dump() for call in result.tool_calls],
+            },
+            rendered_prompt=rendered.text,
+            raw_output=result.text,
+        )
+        return result.text, result.tool_calls
 
     def _format_retrieval_context(
         self,

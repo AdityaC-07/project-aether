@@ -92,14 +92,57 @@ def token_overlap_ratio(text_a: str, text_b: str) -> float:
     return sum(1 for tok in tokens_a if tok in tokens_b) / len(tokens_a)
 
 
+def _substantive_text(data: Dict[str, Any]) -> str:
+    """Extract the meaningful content of a structured LLM payload.
+
+    Returns the concatenated argument fields, reasoning evidence, and factor
+    descriptions, so grounding metrics ignore JSON syntax and reasoning prose
+    that would otherwise dilute the signal.
+    """
+    parts: List[str] = []
+    for key in _ARGUMENT_LISTS:
+        for item in data.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            parts.extend(
+                str(item[field])
+                for field in ("claim", "evidence", "assumption", "target_claim", "challenge", "risk")
+                if item.get(field)
+            )
+    for step in data.get("reasoning") or []:
+        if isinstance(step, dict) and step.get("evidence"):
+            parts.append(str(step["evidence"]))
+    for factor in data.get("factors") or []:
+        if isinstance(factor, dict) and factor.get("description"):
+            parts.append(str(factor["description"]))
+    return " ".join(part for part in parts if part.strip())
+
+
+def _measurement_text(output: str) -> str:
+    """The text grounding metrics are computed over: substantive content when
+    the output is structured JSON, otherwise the raw output."""
+    try:
+        data = extract_json(output)
+        substantive = _substantive_text(data)
+        if substantive:
+            return substantive
+    except ValueError:
+        pass
+    return output
+
+
 def relevance(output: str, context_text: str) -> float:
     """How much of the output is grounded in the source context.
 
     Uses the mean of unigram and bigram containment, so a response that
     rephrases the context still scores well while invented content scores low.
+    When the output is structured JSON, only its substantive content
+    (arguments, evidence, factor descriptions) is scored.
     """
     if not context_text.strip() or not output.strip():
         return 0.0
+
+    output = _measurement_text(output)
 
     out_uni = _content_tokens(output)
     ctx_uni = set(_content_tokens(context_text))
@@ -116,7 +159,7 @@ def hallucination_risk(output: str, context_text: str) -> float:
     """Fraction of meaningful output tokens not present in the context."""
     if not context_text.strip() or not output.strip():
         return 0.0
-    out_uni = _content_tokens(output)
+    out_uni = _content_tokens(_measurement_text(output))
     ctx_uni = set(_content_tokens(context_text))
     if not out_uni:
         return 0.0

@@ -9,7 +9,8 @@ task_definition: |
   Synthesize the debate traces into a balanced final report. First reason step
   by step about the central disagreement and which side the evidence favors,
   then produce a single narrative covering what worked, what failed, why it
-  happened, and how to improve.
+  happened, and how to improve. If the debate traces include tool-assisted
+  findings, preserve that grounding in the reasoning and summary.
 
 context_boundaries: |
   Use ONLY information present in the provided Context and Debate Traces.
@@ -29,7 +30,7 @@ output_format_spec: |
   {"reasoning":[{"step_index":1,"thought":"...","evidence":"...","conclusion":"..."}],"what_worked":"...","what_failed":"...","why_it_happened":"...","how_to_improve":"...","synthesis":"...","recommendation":"..."}
 
 rules:
-  - Produce 1-3 reasoning steps BEFORE the report fields. Steps must be sequential: each conclusion feeds the next thought.
+  - Produce 1-3 reasoning steps BEFORE the report fields. Steps must be sequential, and each conclusion feeds the next thought.
   - what_worked covers aspects supported by the strongest support arguments.
   - what_failed covers aspects exposed by the strongest counter-arguments.
   - why_it_happened names root causes grounded in evidence, not speculation.

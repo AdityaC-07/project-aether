@@ -9,6 +9,7 @@ from app.agents.factor_extractor import FactorExtractorAgent
 from app.agents.support_agent import SupportAgent
 from app.agents.opposition_agent import OppositionAgent
 from app.agents.synthesizer_agent import SynthesizerAgent
+from app.evaluation.confidence import ConfidenceScorer
 from app.schemas.context import ReasoningContext
 from app.schemas.factor import Factor, FactorExtraction
 from app.schemas.debate import DebateTrace, SupportArguments, OppositionCounterArguments
@@ -29,6 +30,7 @@ class AetherOrchestrator:
         self.support_agent = SupportAgent(self.llm)
         self.opposition_agent = OppositionAgent(self.llm)
         self.synthesizer_agent = SynthesizerAgent(self.llm)
+        self.confidence_scorer = ConfidenceScorer()
         self.logs_dir = Path(__file__).resolve().parents[1] / "logs"
         self.log_file = self.logs_dir / "reasoning_logs.json"
         self.retrieval_log_file = self.logs_dir / "retrieval_logs.jsonl"
@@ -49,37 +51,6 @@ class AetherOrchestrator:
             "updated_at": datetime.utcnow().isoformat() + "Z",
             **details,
         }
-
-    def _calculate_confidence(self, debate_logs: List[DebateTrace], final_report: FinalReport) -> float:
-        """Calculate confidence score based on debate analysis quality and balance."""
-        if not debate_logs:
-            return 0.0
-        
-        total_score = 0.0
-        factors_count = len(debate_logs)
-        
-        for debate in debate_logs:
-            support_count = len(debate.support.support_arguments)
-            opposition_count = len(debate.opposition.counter_arguments)
-            
-            # Score based on argument richness (0-50 points)
-            argument_richness = min((support_count + opposition_count) / 6 * 50, 50)
-            
-            # Score based on debate balance (0-30 points)
-            if support_count > 0 and opposition_count > 0:
-                balance_ratio = min(support_count, opposition_count) / max(support_count, opposition_count)
-                balance_score = balance_ratio * 30
-            else:
-                balance_score = 0
-            
-            # Score based on argument depth (0-20 points)
-            depth_score = 20 if support_count > 0 and opposition_count > 0 else 10
-            
-            total_score += argument_richness + balance_score + depth_score
-        
-        # Average and normalize to 0-100
-        avg_score = (total_score / factors_count) if factors_count > 0 else 0
-        return round(min(avg_score, 100), 1)
 
     async def analyze(self, context: ReasoningContext, *, source_document: Dict[str, Any] | None = None) -> Dict[str, Any]:
         try:
@@ -158,6 +129,10 @@ class AetherOrchestrator:
                     factor=factor,
                     support=support,
                     opposition=opposition,
+                    tool_usage=[*support.tool_usage, *opposition.tool_usage],
+                )
+                debate.confidence_data = self.confidence_scorer.score_debate(
+                    debate, context.narrative
                 )
                 debate_logs.append(debate)
                 retrieval_logs.append(
@@ -183,14 +158,23 @@ class AetherOrchestrator:
             )
             print("[ORCHESTRATOR] Synthesis complete")
 
-            # Calculate confidence score based on debate balance
-            confidence_score = self._calculate_confidence(debate_logs, final_report)
-            final_report.confidence_score = confidence_score
+            # Nuanced confidence surface: per-factor certainty, agreement,
+            # uncertainty breakdown, and synthesizer confidence.
+            final_report.confidence_report = self.confidence_scorer.build_report(
+                debate_logs,
+                synthesis_validation=(
+                    self.synthesizer_agent.last_run.validation
+                    if self.synthesizer_agent.last_run is not None
+                    else None
+                ),
+            )
+            final_report.confidence_score = final_report.confidence_report.overall_confidence
 
             # 4) Persist logs (structured, readable)
             session_log: Dict[str, Any] = {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "input_context": context.dict(),
+                "factor_extraction": extraction.dict(),
                 "factors": [f.dict() for f in factors],
                 "debate_logs": [d.dict() for d in debate_logs],
                 "final_report": final_report.dict(),
@@ -212,6 +196,18 @@ class AetherOrchestrator:
                 "retrieval_logs": {
                     "per_factor": retrieval_logs,
                     "synthesis": synthesis_retrieval.model_dump(),
+                },
+                # Full reasoning traces explaining WHY each output was produced
+                "reasoning_traces": {
+                    "factor_extraction": [s.dict() for s in extraction.reasoning],
+                    "debates": {
+                        d.factor_id: {
+                            "support": [s.dict() for s in d.support.reasoning],
+                            "opposition": [s.dict() for s in d.opposition.reasoning],
+                        }
+                        for d in debate_logs
+                    },
+                    "synthesis": [s.dict() for s in final_report.reasoning],
                 },
             }
             self.last_result = response_payload
