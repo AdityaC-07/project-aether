@@ -60,3 +60,11 @@ class DebateTrace(BaseModel):
         description="Confidence surface for this factor's debate, filled by the ConfidenceScorer",
     )
     tool_usage: List[ToolInvocationRecord] = Field(default_factory=list)
+    degraded: bool = Field(
+        default=False,
+        description="True when one or both agents were skipped due to an LLM outage",
+    )
+    degraded_reason: Optional[str] = Field(
+        default=None,
+        description="Why this debate was produced in degraded mode",
+    )

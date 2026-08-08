@@ -12,6 +12,7 @@ from app.schemas.factor import DomainEnum
 from app.schemas.reasoning import ReasoningStep
 from app.schemas.tooling import ToolInvocationRecord
 from app.rag.models import RetrievalContext, RetrievalResult
+from app.utils.logger import StructuredLogger
 from app.utils.llm_client import LLMClient
 from app.tools.registry import ToolRegistry
 
@@ -59,13 +60,27 @@ class BaseAgent:
         *,
         input_context: Optional[Dict[str, Any]] = None,
         json_mode: bool = True,
+        trace: Optional[StructuredLogger] = None,
     ) -> str:
         """Call the LLM and stage a PromptRun. Returns the raw output text.
 
         The run is stored on ``self.last_run`` and only persisted once
         ``_finalize_run`` is called after parsing/validation.
         """
-        content = await self.llm.acompletion(rendered.text, json_mode=json_mode)
+        if trace is not None:
+            with trace.span(
+                "llm.complete",
+                attributes={
+                    "prompt_name": rendered.name,
+                    "prompt_version": rendered.version,
+                    "json_mode": json_mode,
+                    "model": getattr(self.llm, "model", None),
+                },
+            ) as span:
+                content = await self.llm.acompletion(rendered.text, json_mode=json_mode)
+                span.set_attribute("response_chars", len(content))
+        else:
+            content = await self.llm.acompletion(rendered.text, json_mode=json_mode)
 
         self.last_run = PromptRun(
             prompt_name=rendered.name,
@@ -97,14 +112,37 @@ class BaseAgent:
         json_mode: bool = True,
         allowed_tools: Optional[List[str]] = None,
         agent_name: str = "agent",
+        trace: Optional[StructuredLogger] = None,
     ) -> tuple[str, List[ToolInvocationRecord]]:
-        result = await self.llm.acompletion_with_tools(
-            rendered.text,
-            registry=self.tool_registry,
-            allowed_tools=allowed_tools,
-            json_mode=json_mode,
-            agent_name=agent_name,
-        )
+        if trace is not None:
+            with trace.span(
+                "llm.complete_with_tools",
+                attributes={
+                    "prompt_name": rendered.name,
+                    "prompt_version": rendered.version,
+                    "json_mode": json_mode,
+                    "model": getattr(self.llm, "model", None),
+                    "agent": agent_name,
+                    "allowed_tools": allowed_tools or [],
+                },
+            ) as span:
+                result = await self.llm.acompletion_with_tools(
+                    rendered.text,
+                    registry=self.tool_registry,
+                    allowed_tools=allowed_tools,
+                    json_mode=json_mode,
+                    agent_name=agent_name,
+                )
+                span.set_attribute("tool_call_count", len(result.tool_calls))
+                span.set_attribute("response_chars", len(result.text))
+        else:
+            result = await self.llm.acompletion_with_tools(
+                rendered.text,
+                registry=self.tool_registry,
+                allowed_tools=allowed_tools,
+                json_mode=json_mode,
+                agent_name=agent_name,
+            )
 
         self.last_run = PromptRun(
             prompt_name=rendered.name,
