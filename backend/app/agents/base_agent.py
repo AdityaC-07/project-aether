@@ -1,17 +1,155 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Type
 
+from pydantic import BaseModel
+
+from app.evaluation.reasoning_validator import ReasoningValidator
+from app.evaluation.tracker import PromptRun, PromptTracker
+from app.prompts import PromptRegistry, RenderedPrompt
+from app.schemas.factor import DomainEnum
+from app.schemas.reasoning import ReasoningStep
+from app.rag.models import RetrievalContext, RetrievalResult
 from app.utils.llm_client import LLMClient
 
 
-
 class BaseAgent:
-    def __init__(self, llm: LLMClient) -> None:
+    """Base class: versioned prompt resolution + run tracking.
+
+    Subclasses call ``self._render_prompt(name, domain=..., **variables)`` to
+    resolve the deployed (or A/B-pinned) template version, then ``self._complete``
+    to call the LLM and ``self._finalize_run`` once the output is parsed so the
+    reasoning trace is validated and every step is persisted with the run.
+    """
+
+    def __init__(
+        self,
+        llm: LLMClient,
+        registry: Optional[PromptRegistry] = None,
+        tracker: Optional[PromptTracker] = None,
+    ) -> None:
         self.llm = llm
+        self.registry = registry or PromptRegistry()
+        self.tracker = tracker or PromptTracker()
         self.prompts_dir = Path(__file__).resolve().parents[1] / "prompts"
+        self.last_run: Optional[PromptRun] = None
 
     def _read_prompt(self, filename: str) -> str:
+        """Legacy raw-prompt loader, kept for compatibility with old flows."""
         path = self.prompts_dir / filename
         return path.read_text(encoding="utf-8")
+
+    def _render_prompt(
+        self,
+        name: str,
+        domain: Optional[DomainEnum | str] = None,
+        **variables: Any,
+    ) -> RenderedPrompt:
+        """Resolve the active (or A/B-pinned) template and render it."""
+        template = self.registry.get(name)
+        return template.render(domain=domain, **variables)
+
+    async def _complete(
+        self,
+        rendered: RenderedPrompt,
+        *,
+        input_context: Optional[Dict[str, Any]] = None,
+        json_mode: bool = True,
+    ) -> str:
+        """Call the LLM and stage a PromptRun. Returns the raw output text.
+
+        The run is stored on ``self.last_run`` and only persisted once
+        ``_finalize_run`` is called after parsing/validation.
+        """
+        content = await self.llm.acompletion(rendered.text, json_mode=json_mode)
+
+        self.last_run = PromptRun(
+            prompt_name=rendered.name,
+            prompt_version=rendered.version,
+            domain=rendered.domain,
+            input_context=input_context or {},
+            rendered_prompt=rendered.text,
+            raw_output=content,
+        )
+        return content
+
+    def _format_retrieval_context(
+        self,
+        retrieval: RetrievalContext | RetrievalResult | None,
+        *,
+        max_chars_per_chunk: int = 1200,
+    ) -> str:
+        if retrieval is None:
+            return "No retrieved context was provided."
+
+        matches = getattr(retrieval, "matches", None) or []
+        if not matches:
+            return "No retrieved context was available."
+
+        sections: List[str] = []
+        for index, match in enumerate(matches, 1):
+            chunk = match.chunk
+            text = chunk.text[:max_chars_per_chunk]
+            header = (
+                f"[Chunk {index}] similarity={match.similarity:.4f} "
+                f"type={chunk.chunk_type} "
+                f"pages={chunk.page_start or '?'}-{chunk.page_end or '?'} "
+                f"id={chunk.chunk_id}"
+            )
+            if chunk.section_title:
+                header += f" title={chunk.section_title}"
+            sections.append(f"{header}\n{text}")
+
+        return "\n\n".join(sections)
+
+    def _finalize_run(
+        self,
+        *,
+        context_text: Optional[str] = None,
+        expected_schema: Optional[Type[BaseModel]] = None,
+        steps: Optional[List[ReasoningStep]] = None,
+        arguments: Optional[List[Dict[str, Any]]] = None,
+    ) -> PromptRun:
+        """Validate reasoning, score metrics, and persist the run.
+
+        Args:
+            context_text: Source text used to score relevance and step grounding.
+            expected_schema: Pydantic model the output must match (format metric).
+            steps: Parsed chain-of-thought steps, if the output carried any.
+            arguments: Parsed structured arguments (with ``rationale``) used to
+                check that each argument traces to a reasoning step.
+        """
+        run = self.last_run
+        if run is None:
+            raise RuntimeError("_complete must be called before _finalize_run")
+
+        if steps is not None:
+            run.validation = ReasoningValidator().validate_steps(
+                steps, context_text or "", arguments=arguments
+            )
+
+        if context_text is not None or expected_schema is not None:
+            run.evaluate(context_text=context_text, expected_schema=expected_schema)
+
+        if self.tracker is not None:
+            self.tracker.log(run)
+        return run
+
+    @staticmethod
+    def _parse_reasoning(data: Dict[str, Any]) -> List[ReasoningStep]:
+        """Extract reasoning steps from parsed LLM output, skipping malformed entries.
+
+        Structural defects (gaps in step indices, missing fields) are surfaced
+        by ReasoningValidator rather than raised here, so a single bad step
+        never discards the rest of a run.
+        """
+        steps: List[ReasoningStep] = []
+        for entry in data.get("reasoning") or []:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                steps.append(ReasoningStep.model_validate(entry))
+            except Exception:
+                continue
+        return steps

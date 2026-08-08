@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import asyncio
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -46,7 +47,7 @@ async def analyze_pdf(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
         file_bytes = await file.read()
-        pdf_data = extract_metadata_and_text(file_bytes)
+        pdf_data = await asyncio.to_thread(extract_metadata_and_text, file_bytes)
         
         context = ReasoningContext(
             narrative=pdf_data["text"],
@@ -55,7 +56,7 @@ async def analyze_pdf(file: UploadFile = File(...)):
             assumptions=[],
             limitations=[]
         )
-        result = await orchestrator.analyze(context)
+        result = await orchestrator.analyze(context, source_document=pdf_data)
         return result
     except HTTPException:
         raise
@@ -103,7 +104,7 @@ async def analyze_pdf_report(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
         file_bytes = await file.read()
-        pdf_data = extract_metadata_and_text(file_bytes)
+        pdf_data = await asyncio.to_thread(extract_metadata_and_text, file_bytes)
         
         context = ReasoningContext(
             narrative=pdf_data["text"],
@@ -112,7 +113,7 @@ async def analyze_pdf_report(file: UploadFile = File(...)):
             assumptions=[],
             limitations=[]
         )
-        result = await orchestrator.analyze(context)
+        result = await orchestrator.analyze(context, source_document=pdf_data)
         pdf_bytes = pdf_generator.generate_report(result, pdf_data["text"])
         
         return Response(

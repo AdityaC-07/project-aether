@@ -1,13 +1,14 @@
-"""PDF parsing utility to extract text and tables from PDF files."""
+"""PDF parsing utility to extract text, tables, and page-level source blocks from PDF files."""
 
 from io import BytesIO
-from typing import Optional, List
+from typing import Optional, List, Dict
 import warnings
 
 from PyPDF2 import PdfReader
 import camelot
 
 from app.schemas.context import Metric
+from app.rag.models import PdfPage, TableBlock
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -129,6 +130,50 @@ def extract_tables_from_pdf(file_bytes: bytes) -> List[Metric]:
     return metrics
 
 
+def extract_table_blocks_from_pdf(file_bytes: bytes) -> List[TableBlock]:
+    """Extract table blocks with page-aware text for semantic/table-aware chunking."""
+    blocks: List[TableBlock] = []
+    import tempfile
+    import os
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            tables = camelot.read_pdf(tmp_path, pages="all")
+
+        for table in tables:
+            df = table.df
+            if df.empty:
+                continue
+
+            rows = [[str(cell) for cell in row.tolist()] for _, row in df.iterrows()]
+            text = "\n".join(" | ".join(str(cell) for cell in row) for row in rows)
+            page_number = int(getattr(table, "page", 1) or 1)
+            blocks.append(
+                TableBlock(
+                    page_number=page_number,
+                    title=f"Table {len(blocks) + 1}",
+                    text=text,
+                    rows=rows,
+                )
+            )
+    except Exception as e:
+        print(f"Warning: Failed to extract table blocks from PDF: {e}")
+        return blocks
+    finally:
+        try:
+            if 'tmp_path' in locals():
+                os.unlink(tmp_path)
+        except Exception:
+            pass
+
+    return blocks
+
+
 def extract_metadata_and_text(file_bytes: bytes) -> dict:
     """
     Extract both metadata, text, and tables from PDF.
@@ -144,8 +189,29 @@ def extract_metadata_and_text(file_bytes: bytes) -> dict:
         reader = PdfReader(pdf_file)
 
         metadata = reader.metadata if reader.metadata else {}
-        text = extract_text_from_pdf(file_bytes)
+        page_texts: List[str] = []
+        pages: List[PdfPage] = []
+        for page_num, page in enumerate(reader.pages, start=1):
+            try:
+                page_text = page.extract_text() or ""
+            except Exception as e:
+                print(f"Warning: Failed to extract text from page {page_num}: {e}")
+                page_text = ""
+            page_texts.append(page_text)
+            pages.append(PdfPage(page_number=page_num, text=page_text))
+
+        text = "\n\n".join(part for part in page_texts if part.strip())
         metrics = extract_tables_from_pdf(file_bytes)
+        table_blocks = extract_table_blocks_from_pdf(file_bytes)
+
+        if table_blocks:
+            tables_by_page: Dict[int, List[TableBlock]] = {}
+            for table in table_blocks:
+                tables_by_page.setdefault(table.page_number, []).append(table)
+            pages = [
+                PdfPage(page_number=page.page_number, text=page.text, tables=tables_by_page.get(page.page_number, []))
+                for page in pages
+            ]
 
         return {
             "text": text,
@@ -157,6 +223,8 @@ def extract_metadata_and_text(file_bytes: bytes) -> dict:
                 "creator": metadata.get("/Creator", ""),
             },
             "metrics": metrics,
+            "pages": [page.model_dump() for page in pages],
+            "tables": [table.model_dump() for table in table_blocks],
         }
     except Exception as e:
         raise ValueError(f"Failed to extract metadata: {str(e)}")
