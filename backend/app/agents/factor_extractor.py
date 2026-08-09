@@ -56,7 +56,21 @@ class FactorExtractorAgent(BaseAgent):
             print("=" * 60 + "\n")
 
             try:
-                data = self.llm.parse_json(content)
+                result = await self._parse_structured(
+                    content,
+                    schema=FactorsPayload,
+                    agent_name="factor_extractor",
+                )
+                if result.model is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "error": "Factor parsing failed after retries",
+                            "reason": result.error or "output could not be parsed",
+                            "llm_output": content,
+                        },
+                    )
+                data = result.data or {}
                 reasoning = self._parse_reasoning(data)
                 raw_factors = data.get("factors", [])
                 factors: List[Factor] = []

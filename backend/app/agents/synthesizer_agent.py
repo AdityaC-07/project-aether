@@ -68,9 +68,16 @@ class SynthesizerAgent(BaseAgent):
             context_text = f"{context.model_dump_json()}\n{debates_json}\n{retrieval_text}"
 
             try:
-                data = self.llm.parse_json(content)
+                result = await self._parse_structured(
+                    content,
+                    schema=FinalReport,
+                    agent_name="synthesis",
+                )
+                if result.model is None:
+                    raise ValueError(result.error or "output could not be parsed after retries and fallback")
+                data = result.data or {}
                 reasoning = self._parse_reasoning(data)
-                report = FinalReport(**data)
+                report = result.model
 
                 if span is not None:
                     span.set_attribute("retrieval_match_count", len(getattr(retrieval, "matches", []) or []))

@@ -67,9 +67,16 @@ class OppositionAgent(BaseAgent):
             context_text = f"{factor.model_dump_json()}\n{support.model_dump_json()}\n{retrieval_text}"
 
             try:
-                data = self.llm.parse_json(content)
+                result = await self._parse_structured(
+                    content,
+                    schema=OppositionCounterArguments,
+                    agent_name="opposition",
+                )
+                if result.model is None:
+                    raise ValueError(result.error or "output could not be parsed after retries and fallback")
+                data = result.data or {}
                 reasoning = self._parse_reasoning(data)
-                opposition = OppositionCounterArguments(**data)
+                opposition = result.model
                 used_tool_names = sorted({call.display_name for call in tool_calls if call.success})
                 if used_tool_names:
                     for argument in opposition.counter_arguments:

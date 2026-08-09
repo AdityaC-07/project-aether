@@ -5,7 +5,6 @@ from typing import Optional, List, Dict
 import warnings
 
 from PyPDF2 import PdfReader
-import camelot
 
 from app.schemas.context import Metric
 from app.rag.models import PdfPage, TableBlock
@@ -68,6 +67,7 @@ def extract_tables_from_pdf(file_bytes: bytes) -> List[Metric]:
     import os
     
     try:
+        import camelot  # imported lazily: requires optional ghostscript/ghostscript backend
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp.write(file_bytes)
             tmp_path = tmp.name
@@ -137,6 +137,7 @@ def extract_table_blocks_from_pdf(file_bytes: bytes) -> List[TableBlock]:
     import os
 
     try:
+        import camelot  # imported lazily: requires optional ghostscript/ghostscript backend
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp.write(file_bytes)
             tmp_path = tmp.name

@@ -14,6 +14,7 @@ from app.schemas.tooling import ToolInvocationRecord
 from app.rag.models import RetrievalContext, RetrievalResult
 from app.utils.logger import StructuredLogger
 from app.utils.llm_client import LLMClient
+from app.utils.structured_parser import StructuredOutputParser, StructuredParseResult, default_audit
 from app.tools.registry import ToolRegistry
 
 
@@ -38,6 +39,42 @@ class BaseAgent:
         self.prompts_dir = Path(__file__).resolve().parents[1] / "prompts"
         self.last_run: Optional[PromptRun] = None
         self.tool_registry = ToolRegistry()
+        self._structured_parser: Optional[StructuredOutputParser] = None
+
+    def _parser(self) -> StructuredOutputParser:
+        """Shared structured-output parser bound to this agent's LLM client.
+
+        Lazily created so agents that never parse (or tests that inject a stub
+        LLM) pay no setup cost. Auditing goes to the module-wide
+        ``default_audit`` so failure rates are comparable across agents.
+        """
+        if self._structured_parser is None:
+            self._structured_parser = StructuredOutputParser(
+                llm=self.llm,
+                audit=default_audit,
+            )
+        return self._structured_parser
+
+    async def _parse_structured(
+        self,
+        content: str,
+        *,
+        schema: Type[BaseModel],
+        agent_name: Optional[str] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ) -> StructuredParseResult:
+        """Parse ``content`` against ``schema`` with retry + graceful fallback.
+
+        Wraps :class:`StructuredOutputParser` so agents get: JSON extraction,
+        validation against a Pydantic schema, up to 2 strict-JSON re-prompts,
+        and a scaffolded fallback model when the model output is unusable.
+        """
+        return await self._parser().parse(
+            content,
+            schema=schema,
+            agent=agent_name or "agent",
+            config=config,
+        )
 
     def _read_prompt(self, filename: str) -> str:
         """Legacy raw-prompt loader, kept for compatibility with old flows."""
@@ -61,6 +98,7 @@ class BaseAgent:
         input_context: Optional[Dict[str, Any]] = None,
         json_mode: bool = True,
         trace: Optional[StructuredLogger] = None,
+        agent_name: Optional[str] = None,
     ) -> str:
         """Call the LLM and stage a PromptRun. Returns the raw output text.
 
@@ -77,10 +115,18 @@ class BaseAgent:
                     "model": getattr(self.llm, "model", None),
                 },
             ) as span:
-                content = await self.llm.acompletion(rendered.text, json_mode=json_mode)
+                content = await self.llm.acompletion(
+                    rendered.text,
+                    json_mode=json_mode,
+                    agent_name=agent_name or rendered.name,
+                )
                 span.set_attribute("response_chars", len(content))
         else:
-            content = await self.llm.acompletion(rendered.text, json_mode=json_mode)
+            content = await self.llm.acompletion(
+                rendered.text,
+                json_mode=json_mode,
+                agent_name=agent_name or rendered.name,
+            )
 
         self.last_run = PromptRun(
             prompt_name=rendered.name,

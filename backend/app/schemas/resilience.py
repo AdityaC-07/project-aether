@@ -41,7 +41,10 @@ class FallbackDecision(BaseModel):
     reason: str = Field(default="", description="Human-readable explanation")
     error_type: Optional[str] = None
     error_message: Optional[str] = None
+    error_code: Optional[str] = None
     retry_after_ms: float = Field(default=0.0, description="Backoff delay applied before retry")
     elapsed_ms: float = Field(default=0.0, description="Latency of the attempted call")
     cached: bool = Field(default=False, description="True when the response came from the cache")
+    recovery_action: Optional[str] = Field(default=None, description="retry, fallback_model, skip_agent, fail_request")
+    user_message: Optional[str] = Field(default=None, description="Sanitized message safe to return to users")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

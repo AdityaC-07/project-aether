@@ -9,13 +9,16 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
+from app.agents.factor_advisor import FactorAdvisorAgent
 from app.agents.factor_extractor import FactorExtractorAgent
 from app.agents.opposition_agent import OppositionAgent
 from app.agents.support_agent import SupportAgent
 from app.agents.synthesizer_agent import SynthesizerAgent
+from app.core.settings import get_settings
 from app.evaluation.confidence import ConfidenceScorer
 from app.evaluation.explainability import ContributionScorer, CounterfactualAnalyzer
 from app.evaluation.tracker import PromptTracker
+from app.history.store import HistoryStore
 from app.prompts import PromptRegistry
 from app.rag.metrics import RetrievalLogger
 from app.rag.models import PdfDocument, RetrievalResult
@@ -23,10 +26,12 @@ from app.rag.retriever import RetrievalPipeline
 from app.schemas.context import ReasoningContext
 from app.schemas.debate import DebateTrace, OppositionCounterArguments, SupportArguments
 from app.schemas.factor import Factor, FactorExtraction
+from app.schemas.factor_advisor import FactorAdviseResponse
 from app.schemas.final_report import FinalReport
 from app.schemas.reasoning import ReasoningStep
 from app.schemas.resilience import FallbackDecision, FallbackStrategy
 from app.utils.llm_client import LLMClient
+from app.utils.groq_errors import GroqErrorHandler
 from app.utils.logger import ReasoningLogger, StructuredLogger
 from app.utils.resilient_llm import LLMUnavailableError, ResilientLLMClient
 
@@ -59,6 +64,11 @@ class AetherOrchestrator:
             registry=self.prompt_registry,
             tracker=self.prompt_tracker,
         )
+        self.factor_advisor = FactorAdvisorAgent(
+            self.llm,
+            registry=self.prompt_registry,
+            tracker=self.prompt_tracker,
+        )
         self.support_agent = SupportAgent(
             self.llm,
             registry=self.prompt_registry,
@@ -82,6 +92,11 @@ class AetherOrchestrator:
         self.log_file = self.logs_dir / "reasoning_logs.json"
         self.retrieval_log_file = self.logs_dir / "retrieval_logs.jsonl"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
+        _settings = get_settings()
+        self.history_store = HistoryStore(
+            db_path=_settings.history_db_path or None,
+            enabled=_settings.history_enabled,
+        )
         self.status: Dict[str, Any] = {
             "phase": "idle",
             "message": "Idle",
@@ -91,6 +106,21 @@ class AetherOrchestrator:
         self.last_narrative: str | None = None
         self.last_retrieval_metrics: List[Dict[str, Any]] = []
         self.last_trace: Dict[str, Any] | None = None
+        self.error_handler = GroqErrorHandler()
+
+    def refresh_prompt_registry(self) -> None:
+        """Reload prompt templates + active versions from disk and rewire all
+        agents so a deploy takes effect without restarting the service."""
+        self.prompt_registry = PromptRegistry()
+        for agent in (
+            self.factor_extractor,
+            self.factor_advisor,
+            self.support_agent,
+            self.opposition_agent,
+            self.synthesizer_agent,
+        ):
+            agent.registry = self.prompt_registry
+        return self.prompt_registry
 
     def _set_status(self, phase: str, message: str, **details: Any) -> None:
         self.status = {
@@ -100,7 +130,15 @@ class AetherOrchestrator:
             **details,
         }
 
-    def _record_skip(self, agent: str, factor_id: Optional[str], detail: str) -> None:
+    def _record_skip(
+        self,
+        agent: str,
+        factor_id: Optional[str],
+        detail: str,
+        *,
+        error_code: Optional[str] = None,
+        user_message: Optional[str] = None,
+    ) -> None:
         """Record an agent-level skip and flip the degraded flag."""
         self.synthesis_degraded = self.synthesis_degraded or agent == "synthesis"
         self.resilience_log.append(
@@ -110,6 +148,9 @@ class AetherOrchestrator:
                 strategy=FallbackStrategy.SKIP_AGENT,
                 reason="Agent skipped in degraded mode",
                 error_message=detail,
+                error_code=error_code,
+                recovery_action="skip_agent",
+                user_message=user_message or "The request could not be completed for this step.",
             )
         )
         self._degraded_steps.append({"agent": agent, "factor_id": factor_id, "reason": detail})
@@ -128,11 +169,18 @@ class AetherOrchestrator:
             result = await coro
             return result, False
         except Exception as exc:
-            detail = f"{reason_prefix}: {type(exc).__name__}: {exc}"
-            self._record_skip(agent, factor_id, detail)
+            info = self.error_handler.classify(exc)
+            detail = f"{reason_prefix}: {info.error_code}"
+            self._record_skip(
+                agent,
+                factor_id,
+                detail,
+                error_code=info.error_code,
+                user_message=info.user_message,
+            )
             if not self.allow_degraded:
-                raise
-            print(f"  [DEGRADED] Skipping {agent} ({detail})")
+                raise HTTPException(status_code=503, detail=info.user_message)
+            print(f"  [DEGRADED] Skipping {agent} ({info.error_code})")
             return fallback_factory(), True
 
     def _degraded_synthesis(self, debates: List[DebateTrace]) -> FinalReport:
@@ -179,17 +227,117 @@ class AetherOrchestrator:
             ],
         )
 
+    async def advise(
+        self,
+        context: ReasoningContext,
+        custom_factors: Optional[List[Factor]] = None,
+    ) -> FactorAdviseResponse:
+        """Two-phase workflow step: extract + validate factors and suggest related ones.
+
+        Extraction degrades to no factors when the LLM is unavailable; custom
+        factors the user provided are always validated (with a deterministic
+        heuristic fallback when the LLM is down).
+        """
+        extracted: List[Factor] = []
+        custom = list(custom_factors or [])
+        if context.narrative.strip():
+            try:
+                extraction = await self.factor_extractor.extract_factors(context)
+                extracted = extraction.factors
+            except Exception:
+                extracted = []
+        candidates = [*custom, *extracted]
+        validations = await self.factor_advisor.validate_factors(context, candidates)
+        suggestions = await self.factor_advisor.suggest_factors(context, candidates)
+        return FactorAdviseResponse(
+            narrative=context.narrative,
+            context=context,
+            extracted_factors=extracted,
+            custom_factors=custom,
+            validations=validations,
+            suggestions=suggestions,
+        )
+
+    @staticmethod
+    def _normalize_factors(factors: List[Factor]) -> List[Factor]:
+        """Dedupe by description and renumber to F1..Fn in selection order."""
+        seen: set[str] = set()
+        normalized: List[Factor] = []
+        for factor in factors:
+            description = (factor.description or "").strip()
+            key = description.lower()
+            if not description or key in seen:
+                continue
+            seen.add(key)
+            normalized.append(
+                Factor(
+                    factor_id=f"F{len(normalized) + 1}",
+                    description=description,
+                    domain=factor.domain,
+                )
+            )
+        return normalized
+
+    def _history_payload(
+        self,
+        *,
+        request_id: str,
+        input_type: str,
+        context: ReasoningContext,
+        factors: List[Factor],
+        final_report: FinalReport,
+        debate_logs: List[DebateTrace],
+        status: str,
+    ) -> Dict[str, Any]:
+        factor_scores = []
+        for debate in debate_logs:
+            confidence_data = debate.confidence_data
+            factor_scores.append(
+                {
+                    "factor_id": debate.factor_id,
+                    "factor_description": debate.factor.description,
+                    "domain": debate.factor.domain.value,
+                    "confidence": confidence_data.confidence if confidence_data else 0.0,
+                    "agreement": confidence_data.support_opposition_agreement
+                    if confidence_data
+                    else 0.0,
+                    "contribution": final_report.factor_contribution_scores.get(
+                        debate.factor_id, 0.0
+                    ),
+                }
+            )
+        return {
+            "analysis_id": request_id,
+            "request_id": request_id,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "input_type": input_type,
+            "narrative": context.narrative,
+            "factors": [factor.dict() for factor in factors],
+            "final_report": final_report.dict(),
+            "confidence_score": final_report.confidence_score,
+            "degraded": bool(self._degraded_steps),
+            "factor_scores": factor_scores,
+            "status": status,
+        }
+
+    def _persist_history(self, payload: Dict[str, Any]) -> None:
+        try:
+            self.history_store.save_analysis(payload)
+        except Exception as exc:
+            print(f"[HISTORY] Failed to persist analysis: {exc}")
+
     async def analyze(
         self,
         context: ReasoningContext,
         *,
         source_document: Dict[str, Any] | None = None,
+        factors: Optional[List[Factor]] = None,
+        input_type: str = "text",
     ) -> Dict[str, Any]:
         request_id = uuid.uuid4().hex
         trace_logger = StructuredLogger(request_id=request_id, service_name="project-aether")
         retrieval_pipeline = RetrievalPipeline(logger=RetrievalLogger(self.retrieval_log_file))
         extraction: FactorExtraction | None = None
-        factors: List[Factor] = []
         debate_logs: List[DebateTrace] = []
         retrieval_logs: List[Dict[str, Any]] = []
         synthesis_retrieval: RetrievalResult | None = None
@@ -229,19 +377,37 @@ class AetherOrchestrator:
                     await retrieval_pipeline.ingest_document(pdf_document)
                     span.set_attribute("document_text_length", len(getattr(pdf_document, "text", "") or ""))
 
-                self._set_status("extracting", "Extracting factors", request_id=request_id)
-                print("\n[ORCHESTRATOR] Starting factor extraction...")
-                try:
-                    extraction = await self.factor_extractor.extract_factors(context, trace=trace_logger)
-                except LLMUnavailableError as exc:
-                    self._set_status("error", f"Factor extraction unavailable: {exc}", request_id=request_id)
-                    session_log.update({"status": "error", "error": {"type": "LLMUnavailableError", "message": str(exc)}})
-                    raise HTTPException(status_code=503, detail=f"Factor extraction unavailable after fallbacks: {exc}")
-                factors = extraction.factors
-                total_factors = len(factors)
-                root_span.set_attribute("factor_count", total_factors)
-                print(f"[ORCHESTRATOR] Extracted {len(factors)} factors")
-                await asyncio.sleep(2)
+                if factors is not None and len(factors) > 0:
+                    factors = self._normalize_factors(factors)
+                    extraction = None
+                    total_factors = len(factors)
+                    root_span.set_attribute("factor_count", total_factors)
+                    self._set_status(
+                        "support",
+                        f"Preparing {total_factors} selected factors",
+                        factor_total=total_factors,
+                        request_id=request_id,
+                    )
+                    print(f"[ORCHESTRATOR] Using {total_factors} user-selected factors")
+                else:
+                    self._set_status("extracting", "Extracting factors", request_id=request_id)
+                    print("\n[ORCHESTRATOR] Starting factor extraction...")
+                    try:
+                        extraction = await self.factor_extractor.extract_factors(context, trace=trace_logger)
+                    except LLMUnavailableError as exc:
+                        info = self.error_handler.classify(exc)
+                        self._record_skip("factor_extraction", None, f"Factor extraction skipped: {info.error_code}", error_code=info.error_code, user_message=info.user_message)
+                        self._set_status(
+                            "extracting",
+                            "Factor extraction skipped; continuing in degraded mode",
+                            request_id=request_id,
+                        )
+                        extraction = FactorExtraction(reasoning=[], factors=[])
+                    factors = extraction.factors
+                    total_factors = len(factors)
+                    root_span.set_attribute("factor_count", total_factors)
+                    print(f"[ORCHESTRATOR] Extracted {len(factors)} factors")
+                    await asyncio.sleep(2)
 
                 for i, factor in enumerate(factors, 1):
                     print(f"\n[ORCHESTRATOR] Processing factor {i}/{total_factors}: {factor.factor_id}")
@@ -549,6 +715,17 @@ class AetherOrchestrator:
             self.last_narrative = context.narrative
             self.last_retrieval_metrics = retrieval_logs
             self.last_trace = trace_dict
+            self._persist_history(
+                self._history_payload(
+                    request_id=request_id,
+                    input_type=input_type,
+                    context=context,
+                    factors=factors,
+                    final_report=final_report,
+                    debate_logs=debate_logs,
+                    status="completed",
+                )
+            )
             return response_payload
         except Exception as exc:
             self._set_status("error", f"Error: {exc}", request_id=request_id)
@@ -584,4 +761,16 @@ class AetherOrchestrator:
             )
             ReasoningLogger.save_session(session_log, self.log_file)
             self.last_trace = trace_logger.request_trace.to_dict()
+            if final_report is not None:
+                self._persist_history(
+                    self._history_payload(
+                        request_id=request_id,
+                        input_type=input_type,
+                        context=context,
+                        factors=factors,
+                        final_report=final_report,
+                        debate_logs=debate_logs,
+                        status="error",
+                    )
+                )
             raise

@@ -40,6 +40,7 @@ class CircuitBreaker:
         self._failures: Deque[float] = deque()
         self._opened_at: Optional[float] = None
         self._half_open_probes = 0
+        self._consecutive_failures = 0
         self._total_successes = 0
         self._total_failures = 0
         self._lock = RLock()
@@ -78,6 +79,7 @@ class CircuitBreaker:
     def record_success(self) -> None:
         with self._lock:
             self._total_successes += 1
+            self._consecutive_failures = 0
             if self._state == CircuitState.HALF_OPEN:
                 self._state = CircuitState.CLOSED
                 self._failures.clear()
@@ -88,13 +90,17 @@ class CircuitBreaker:
         now = time.monotonic()
         with self._lock:
             self._total_failures += 1
+            self._consecutive_failures += 1
             self._failures.append(now)
             self._prune()
             if self._state == CircuitState.HALF_OPEN:
                 self._state = CircuitState.OPEN
                 self._opened_at = now
                 self._half_open_probes = 0
-            elif self._state == CircuitState.CLOSED and len(self._failures) >= self.failure_threshold:
+            elif (
+                self._state == CircuitState.CLOSED
+                and (len(self._failures) >= self.failure_threshold or self._consecutive_failures >= self.failure_threshold)
+            ):
                 self._state = CircuitState.OPEN
                 self._opened_at = now
 
@@ -112,6 +118,7 @@ class CircuitBreaker:
                 "name": self.name,
                 "state": state.value,
                 "failures_in_window": len(self._failures),
+                "consecutive_failures": self._consecutive_failures,
                 "failure_threshold": self.failure_threshold,
                 "cooldown_seconds": self.cooldown_seconds,
                 "half_open_max_probes": self.half_open_max_probes,

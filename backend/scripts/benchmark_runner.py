@@ -68,7 +68,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="Run benchmark comparisons over prompt versions and models.")
     parser.add_argument("--dataset", required=True, help="Path to a benchmark dataset JSON file.")
     parser.add_argument("--output", required=True, help="Path to write the benchmark report JSON.")
-    parser.add_argument("--model", default="gemini-2.5-pro", help="Default Gemini model to evaluate.")
+    parser.add_argument("--model", default="llama-3.1-70b-versatile", help="Default Groq model to evaluate.")
     parser.add_argument(
         "--config",
         action="append",

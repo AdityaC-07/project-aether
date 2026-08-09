@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import json
 import math
 import os
 import sqlite3
@@ -10,10 +9,8 @@ import time
 from dataclasses import dataclass
 from statistics import NormalDist
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
-from urllib.parse import urlparse
 
 import httpx
-from google.genai import types
 from sqlalchemy import create_engine, text as sql_text
 
 from app.schemas.tooling import ToolInvocationRecord
@@ -30,12 +27,15 @@ class ToolDefinition:
     parameters_json_schema: Dict[str, Any]
     handler: ToolHandler
 
-    def to_gemini_declaration(self) -> types.FunctionDeclaration:
-        return types.FunctionDeclaration(
-            name=self.name,
-            description=self.description,
-            parameters_json_schema=self.parameters_json_schema,
-        )
+    def to_openai_tool(self) -> Dict[str, Any]:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters_json_schema,
+            },
+        }
 
 
 def _ensure_list(values: Any) -> List[float]:
@@ -234,11 +234,12 @@ class ToolRegistry:
             lines.append(f"- {tool.display_name} ({tool.name}): {tool.description}")
         return "\n".join(lines)
 
-    def build_gemini_tools(self, names: Optional[Sequence[str]] = None) -> List[types.Tool]:
-        declarations = [tool.to_gemini_declaration() for tool in self.list_tools(names)]
-        if not declarations:
-            return []
-        return [types.Tool(function_declarations=declarations)]
+    def build_openai_tools(self, names: Optional[Sequence[str]] = None) -> List[Dict[str, Any]]:
+        return [tool.to_openai_tool() for tool in self.list_tools(names)]
+
+    def build_gemini_tools(self, names: Optional[Sequence[str]] = None) -> List[Dict[str, Any]]:
+        """Backward-compatible alias retained for older call sites."""
+        return self.build_openai_tools(names)
 
     async def execute(self, name: str, arguments: Dict[str, Any], *, agent: str) -> ToolInvocationRecord:
         definition = self.get(name)
@@ -484,4 +485,3 @@ class ToolRegistry:
             return await asyncio.to_thread(_run_query)
 
         raise ValueError(f"Unsupported source_type: {source_type}")
-
