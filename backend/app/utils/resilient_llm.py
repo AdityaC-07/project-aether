@@ -88,12 +88,7 @@ def _env_fallback_models() -> List[str]:
     names = settings.fallback_models_for()
     if names:
         return names
-    raw = (
-        os.getenv("GROQ_FALLBACK_MODELS", "")
-        or os.getenv("GROQ_MODEL_TIERS", "")
-        or os.getenv("GEMINI_FALLBACK_MODEL", "")
-        or os.getenv("GEMINI_MODEL_TIERS", "")
-    )
+    raw = os.getenv("GROQ_FALLBACK_MODELS", "") or os.getenv("GROQ_MODEL_TIERS", "")
     parsed = [name.strip() for name in raw.split(",") if name.strip()]
     return parsed or ["mixtral-8x7b-32768", "llama-3.1-70b-versatile"]
 

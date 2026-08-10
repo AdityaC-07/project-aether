@@ -1,34 +1,24 @@
 from __future__ import annotations
 
 import asyncio
-import os
+import hashlib
+import math
+import re
 from dataclasses import dataclass
 from typing import List, Sequence
-
-from google import genai
-from google.genai import types
 
 
 @dataclass(slots=True)
 class EmbeddingConfig:
-    model: str = "gemini-embedding-001"
-    output_dimensionality: int | None = None
-    location: str = "us-central1"
+    model: str = "local-hash-embedding-v1"
+    output_dimensionality: int = 256
+    use_bigrams: bool = True
+    normalize: bool = True
 
 
 class EmbeddingService:
     def __init__(self, config: EmbeddingConfig | None = None) -> None:
-        resolved_dimensionality = os.getenv("GOOGLE_EMBEDDING_DIMENSIONALITY", "").strip()
-        self.config = config or EmbeddingConfig(
-            model=os.getenv("GOOGLE_EMBEDDING_MODEL", "gemini-embedding-001"),
-            output_dimensionality=int(resolved_dimensionality) if resolved_dimensionality else None,
-            location=os.getenv("GCP_LOCATION", os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")),
-        )
-        self.client = genai.Client(
-            vertexai=True,
-            project=os.getenv("GCP_PROJECT", os.getenv("GOOGLE_CLOUD_PROJECT")),
-            location=self.config.location,
-        )
+        self.config = config or EmbeddingConfig()
 
     async def embed_texts(self, texts: Sequence[str], *, task_type: str = "RETRIEVAL_DOCUMENT") -> List[List[float]]:
         return await asyncio.gather(*(self.embed_text(text, task_type=task_type) for text in texts))
@@ -37,16 +27,33 @@ class EmbeddingService:
         return await asyncio.to_thread(self._embed_text_sync, text, task_type, title)
 
     def _embed_text_sync(self, text: str, task_type: str, title: str | None) -> List[float]:
-        config_kwargs: dict[str, object] = {"task_type": task_type}
-        if self.config.output_dimensionality:
-            config_kwargs["output_dimensionality"] = self.config.output_dimensionality
-        if title:
-            config_kwargs["title"] = title
+        vector = [0.0] * max(1, int(self.config.output_dimensionality))
+        tokens = self._tokenize(text, title=title, task_type=task_type)
+        if not tokens:
+            return vector
 
-        response = self.client.models.embed_content(
-            model=self.config.model,
-            contents=text,
-            config=types.EmbedContentConfig(**config_kwargs),
-        )
-        return list(response.embeddings[0].values)
+        for token in tokens:
+            self._add_feature(vector, token, weight=1.0)
 
+        if self.config.use_bigrams and len(tokens) > 1:
+            for left, right in zip(tokens, tokens[1:]):
+                self._add_feature(vector, f"{left}::{right}", weight=0.5)
+
+        if self.config.normalize:
+            norm = math.sqrt(sum(value * value for value in vector))
+            if norm:
+                vector = [value / norm for value in vector]
+
+        return vector
+
+    def _tokenize(self, text: str, *, title: str | None, task_type: str) -> List[str]:
+        parts = [text, title or "", task_type]
+        normalized = " ".join(part for part in parts if part).lower()
+        return re.findall(r"[a-z0-9]+", normalized)
+
+    def _add_feature(self, vector: List[float], token: str, *, weight: float) -> None:
+        digest = hashlib.sha256(token.encode("utf-8")).digest()
+        index = int.from_bytes(digest[:4], "big") % len(vector)
+        sign = -1.0 if digest[4] & 1 else 1.0
+        magnitude = 1.0 + (digest[5] / 255.0)
+        vector[index] += weight * sign * magnitude

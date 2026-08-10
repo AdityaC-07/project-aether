@@ -18,12 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.evaluation import (  # noqa: E402
-    PromptRun,
-    PromptTracker,
-    ReasoningValidator,
-    ReportGenerator,
-)
+from app.evaluation.reasoning_validator import ReasoningValidator  # noqa: E402
+from app.evaluation.report import ReportGenerator  # noqa: E402
+from app.evaluation.tracker import PromptRun, PromptTracker  # noqa: E402
 from app.prompts import PromptRegistry  # noqa: E402
 from app.schemas.context import ReasoningContext  # noqa: E402
 from app.schemas.debate import SupportArguments  # noqa: E402

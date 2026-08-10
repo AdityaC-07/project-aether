@@ -11,7 +11,6 @@ from statistics import NormalDist
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
 
 import httpx
-from sqlalchemy import create_engine, text as sql_text
 
 from app.schemas.tooling import ToolInvocationRecord
 
@@ -236,10 +235,6 @@ class ToolRegistry:
 
     def build_openai_tools(self, names: Optional[Sequence[str]] = None) -> List[Dict[str, Any]]:
         return [tool.to_openai_tool() for tool in self.list_tools(names)]
-
-    def build_gemini_tools(self, names: Optional[Sequence[str]] = None) -> List[Dict[str, Any]]:
-        """Backward-compatible alias retained for older call sites."""
-        return self.build_openai_tools(names)
 
     async def execute(self, name: str, arguments: Dict[str, Any], *, agent: str) -> ToolInvocationRecord:
         definition = self.get(name)
@@ -467,6 +462,13 @@ class ToolRegistry:
             query = resource.strip()
             if not query.lower().startswith("select"):
                 raise ValueError("SQL fetch only allows SELECT queries")
+            try:
+                from sqlalchemy import create_engine, text as sql_text
+            except Exception as exc:
+                raise RuntimeError(
+                    "SQL tool support requires SQLAlchemy. "
+                    "Install or repair the SQLAlchemy dependency to use source_type='sql'."
+                ) from exc
             engine = create_engine(connection_string)
 
             def _run_query() -> Dict[str, Any]:

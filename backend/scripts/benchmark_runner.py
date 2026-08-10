@@ -3,7 +3,7 @@
 Usage examples:
   python scripts/benchmark_runner.py --dataset benchmarks.json --output report.json
   python scripts/benchmark_runner.py --dataset benchmarks.json --output report.json ^
-    --model gemini-2.5-pro --config baseline:support=3.0.0,opposition=2.0.0 ^
+    --model llama-3.1-70b-versatile --config baseline:support=3.0.0,opposition=2.0.0 ^
     --config candidate:support=2.0.0,opposition=2.0.0
 """
 
@@ -18,7 +18,7 @@ from typing import Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.evaluation import (  # noqa: E402
+from app.evaluation.benchmark import (  # noqa: E402
     BenchmarkConfiguration,
     BenchmarkRunner,
     TestDataset,

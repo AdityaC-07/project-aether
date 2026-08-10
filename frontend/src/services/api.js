@@ -2,8 +2,8 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 const GROQ_FLAG = String(import.meta.env.VITE_GROQ_BACKEND ?? "1").toLowerCase();
 export const isGroqBackend = ["1", "true", "yes", "on"].includes(GROQ_FLAG);
-export const ENGINE_LABEL = isGroqBackend ? "Groq" : "Gemini";
-export const STATUS_POLL_MS = isGroqBackend ? 3000 : 8000;
+export const ENGINE_LABEL = "Groq";
+export const STATUS_POLL_MS = 3000;
 
 const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
 

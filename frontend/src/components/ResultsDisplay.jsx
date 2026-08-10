@@ -56,11 +56,7 @@ const RuntimePanel = ({ result, metrics }) => {
         <div className="runtime-row">
           <span className="runtime-label">Engine</span>
           <span className="runtime-value">
-            <span
-              className={`engine-badge ${isGroqBackend ? "groq" : "gemini"}`}
-            >
-              {ENGINE_LABEL}
-            </span>
+            <span className="engine-badge groq">{ENGINE_LABEL}</span>
           </span>
         </div>
 
@@ -184,11 +180,7 @@ const ResultsDisplay = ({
         <div className="loading-state">
           <span className="loading-spinner"></span>
           Processing your analysis...
-          <span
-            className={`engine-badge ${isGroqBackend ? "groq" : "gemini"}`}
-          >
-            {ENGINE_LABEL}
-          </span>
+          <span className="engine-badge groq">{ENGINE_LABEL}</span>
         </div>
         {isGroqBackend && (
           <div className="status-note">

@@ -80,11 +80,7 @@ const LiveArena = ({ status }) => {
           <Swords className="icon" aria-hidden="true" />
           Live Debate
         </span>
-        <span
-          className={`engine-badge ${isGroqBackend ? "groq" : "gemini"}`}
-        >
-          {ENGINE_LABEL}
-        </span>
+        <span className="engine-badge groq">{ENGINE_LABEL}</span>
         <span className="arena-phase">
           {status?.message || "Starting analysis"}
         </span>
