@@ -9,6 +9,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from reportlab.graphics.shapes import Drawing, Rect, String
 
 
 class AETHERPDFGenerator:
@@ -28,6 +29,33 @@ class AETHERPDFGenerator:
             'statistics': 'Statistics',
         }
         return domain_map.get(domain.lower(), domain)
+
+    def _importance_drawing(self, rankings: List[Dict[str, Any]]) -> Drawing:
+        """Horizontal bar chart of factor importance (relative contribution)."""
+        bar_width_max = 220
+        row_height = 26
+        chart = Drawing(width=360, height=max(40, len(rankings) * row_height + 10))
+        for index, entry in enumerate(rankings):
+            y = len(rankings) * row_height - index * row_height - row_height
+            label = entry.get('factor_id', '?')
+            importance = entry.get('importance', 0)
+            contribution = entry.get('contribution', 0)
+            color = (
+                colors.HexColor('#3b82f6')
+                if contribution >= 0
+                else colors.HexColor('#ef4444')
+            )
+            chart.add(String(2, y + 8, label, fontName='Helvetica-Bold', fontSize=10))
+            bar_width = max(3, int(importance * bar_width_max))
+            chart.add(Rect(70, y + 2, bar_width, 16, fillColor=color, strokeColor=None))
+            chart.add(String(
+                78 + bar_width,
+                y + 8,
+                f"{importance:.0%}  ({contribution:+.3f})",
+                fontName='Helvetica',
+                fontSize=8,
+            ))
+        return chart
 
     def _create_custom_styles(self):
         """Create custom paragraph styles."""
@@ -88,7 +116,69 @@ class AETHERPDFGenerator:
         final_report = analysis_result.get('final_report', {})
         confidence = final_report.get('confidence_score', 0)
         story.append(Paragraph(f"<b>Confidence Score:</b> {confidence}%", self.styles['Normal']))
+
+        # Nuanced confidence breakdown
+        confidence_report = final_report.get('confidence_report') or {}
+        if confidence_report:
+            synth_conf = confidence_report.get('synthesizer_confidence', 0)
+            breakdown = confidence_report.get('uncertainty_breakdown', {})
+            story.append(Paragraph(
+                f"<b>Synthesizer Confidence:</b> {synth_conf}% (consensus reached across the debate)",
+                self.styles['Normal']
+            ))
+            if breakdown:
+                breakdown_text = ", ".join(
+                    f"{key}: {value:.0%}" for key, value in breakdown.items()
+                )
+                story.append(Paragraph(f"<b>Uncertainty Breakdown:</b> {breakdown_text}", self.styles['Normal']))
+
+            uncertain_factors = confidence_report.get('uncertain_factors', [])
+            if uncertain_factors:
+                story.append(Paragraph("<b>Uncertain Factors:</b>", self.styles['Normal']))
+                for factor in uncertain_factors:
+                    story.append(Paragraph(
+                        f"&nbsp;&nbsp;{factor.get('factor_id', '')}: "
+                        f"confidence {factor.get('confidence', 0)}% "
+                        f"({factor.get('uncertainty_source', 'unknown')}, "
+                        f"magnitude {factor.get('magnitude', 0):.0%}) - "
+                        f"{factor.get('reason', '')}",
+                        self.styles['Normal'],
+                    ))
         story.append(Spacer(1, 0.3*inch))
+
+        # Factor importance: permutation-based visual summary
+        feature_importance = final_report.get('feature_importance') or {}
+        rankings = feature_importance.get('rankings') or []
+        if rankings:
+            story.append(Paragraph("Factor Importance", self.styles['CustomHeading']))
+            story.append(Paragraph(
+                "Which factors most influenced the final recommendation. Bars show each "
+                "factor's relative contribution to synthesis quality (permutation analysis: "
+                "quality change when the factor is removed; blue = positive, red = negative).",
+                self.styles['Normal'],
+            ))
+            story.append(Spacer(1, 0.1*inch))
+            story.append(self._importance_drawing(rankings))
+            story.append(Spacer(1, 0.1*inch))
+            for entry in rankings:
+                drivers = entry.get('driver_arguments') or []
+                if drivers:
+                    story.append(Paragraph(
+                        f"<b>{entry.get('factor_id', '')}</b> top arguments: {'; '.join(drivers)}",
+                        self.styles['Normal'],
+                    ))
+            counterfactuals = final_report.get('counterfactuals') or []
+            if counterfactuals:
+                story.append(Spacer(1, 0.1*inch))
+                story.append(Paragraph("<b>What if a factor were removed?</b>", self.styles['Normal']))
+                for cf in counterfactuals:
+                    story.append(Paragraph(
+                        f"&nbsp;&nbsp;Without <b>{cf.get('factor_id', '')}</b> "
+                        f"(contribution {cf.get('contribution', 0):+.3f}): "
+                        f"{cf.get('explanation', '')}",
+                        self.styles['Normal'],
+                    ))
+            story.append(Spacer(1, 0.3*inch))
 
         # Executive Summary Section (Final Report at the top)
         if final_report:

@@ -4,8 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18+-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Google Gemini](https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![Vertex AI](https://img.shields.io/badge/Vertex_AI-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white)](https://cloud.google.com/vertex-ai)
+[![Groq](https://img.shields.io/badge/Groq-7C3AED?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com/)
 
 Coordinator-driven **multi-agent AI system** for structured debate, opposition, and synthesis over a normalized reasoning context.
 
@@ -39,7 +38,7 @@ The system extracts debatable factors, argues for and against them using indepen
 
 ## Tech Stack
 
-- **Backend**: Python 3.10+, FastAPI, Pydantic v2, Gemini via Vertex AI (google-genai)
+- **Backend**: Python 3.10+, FastAPI, Pydantic v2, Groq
 - **Frontend**: React 19+, Vite, CSS
 - **Data Processing**: PyPDF2, Camelot (table extraction)
 - **Async**: async/await architecture
@@ -104,12 +103,14 @@ pip install -r requirements.txt
 
 ### 3) Configure environment variables
 
-Create a `.env` file in the **project root** or `backend/` (Vertex AI via ADC):
+Create a `.env` file in the `backend/` folder:
 
 ```env
-GCP_PROJECT=YOUR_GCP_PROJECT_ID
-GCP_LOCATION=us-central1
-GEMINI_MODEL=gemini-2.5-pro
+AETHER_ENV=development
+GROQ_API_KEY=your_groq_api_key
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+GROQ_TIMEOUT_SECONDS=120
+GROQ_MAX_CONCURRENCY=8
 ```
 
 > ⚠️ `.env` is **git-ignored** and must not be committed.
@@ -399,7 +400,7 @@ project-aether/
 
 ## Notes
 
-- The system uses **Gemini via Vertex AI (`google-genai` SDK)**
+- The system uses **Groq** for LLM calls
 - Billing or available quota is required for sustained usage
 - Free-tier quotas may be limited depending on project settings
 - Agents are isolated and stateless per request
